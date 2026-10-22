@@ -36,7 +36,7 @@ export default function ProfileTab() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-navy-950">
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#070B14' }} className="flex-1 bg-navy-950">
       <ScrollView className="flex-1 px-4 pt-3" showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View className="pb-6">

@@ -48,7 +48,7 @@ export default function AuthModal() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-navy-950">
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#070B14' }} className="flex-1 bg-navy-950">
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         className="flex-1 px-5 pt-3 justify-between"

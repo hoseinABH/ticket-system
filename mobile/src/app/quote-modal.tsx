@@ -97,7 +97,7 @@ export default function QuoteModal() {
   const { quote } = activeQuote;
 
   return (
-    <SafeAreaView className="flex-1 bg-navy-950">
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#070B14' }} className="flex-1 bg-navy-950">
       <View className="flex-1 px-5 pt-3">
         {/* Modal Top Bar */}
         <View className="flex-row items-center justify-between pb-4 border-b border-slate-800/80">
