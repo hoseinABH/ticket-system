@@ -29,7 +29,7 @@ export const FlightCard: React.FC<FlightCardProps> = ({ flight, onSelect }) => {
       className="mb-4 rounded-2xl bg-navy-850 border border-slate-800/80 p-5 shadow-lg shadow-black/40"
     >
       {/* Top Header: Airline & Urgency Badge */}
-      <div className="flex-row items-center justify-between pb-3 border-b border-slate-800/60">
+      <View className="flex-row items-center justify-between pb-3 border-b border-slate-800/60">
         <View className="flex-row items-center space-x-2">
           <View className="w-8 h-8 rounded-lg bg-cyan-500/10 items-center justify-center border border-cyan-500/20">
             <Plane size={16} color="#22D3EE" />
@@ -57,7 +57,7 @@ export const FlightCard: React.FC<FlightCardProps> = ({ flight, onSelect }) => {
             </Text>
           </View>
         )}
-      </div>
+      </View>
 
       {/* Origin, Trajectory, Destination */}
       <View className="flex-row items-center justify-between py-4">
