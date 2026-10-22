@@ -2,8 +2,12 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { Platform, View } from 'react-native';
 import { Plane, Ticket, User } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function TabLayout() {
+  const insets = useSafeAreaInsets();
+  const bottomInset = Math.max(insets.bottom, Platform.OS === 'ios' ? 24 : 12);
+
   return (
     <Tabs
       screenOptions={{
@@ -14,9 +18,9 @@ export default function TabLayout() {
           backgroundColor: '#0B1120',
           borderTopColor: 'rgba(255, 255, 255, 0.08)',
           borderTopWidth: 1,
-          height: Platform.OS === 'ios' ? 88 : 64,
+          height: 56 + bottomInset,
           paddingTop: 8,
-          paddingBottom: Platform.OS === 'ios' ? 28 : 10,
+          paddingBottom: bottomInset,
         },
         tabBarLabelStyle: {
           fontSize: 11,

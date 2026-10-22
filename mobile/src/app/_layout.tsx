@@ -3,6 +3,7 @@ import React, { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useAuthStore } from '../store/useAuthStore';
 
 const queryClient = new QueryClient({
@@ -22,9 +23,10 @@ export default function RootLayout() {
   }, [initializeAuth]);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <StatusBar style="light" />
-      <Stack
+    <SafeAreaProvider>
+      <QueryClientProvider client={queryClient}>
+        <StatusBar style="light" />
+        <Stack
         screenOptions={{
           headerShown: false,
           contentStyle: { backgroundColor: '#070B14' },
@@ -50,5 +52,6 @@ export default function RootLayout() {
         />
       </Stack>
     </QueryClientProvider>
-  );
+  </SafeAreaProvider>
+);
 }
