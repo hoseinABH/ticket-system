@@ -1,12 +1,7 @@
 import axios from 'axios';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
-import { useAuthStore } from '../store/useAuthStore';
 
-// Determine the best backend host:
-// - iOS Simulator / Web: localhost:3000
-// - Android Emulator: 10.0.2.2:3000
-// - Physical device with Expo Go: IP of the host machine
 const getBaseUrl = (): string => {
   if (process.env.EXPO_PUBLIC_API_URL) {
     return process.env.EXPO_PUBLIC_API_URL;
@@ -32,11 +27,20 @@ export const api = axios.create({
   timeout: 10000,
 });
 
+let currentToken: string | null = null;
+export const setAuthToken = (token: string | null) => {
+  currentToken = token;
+};
+
+let onUnauthorizedCallback: (() => void) | null = null;
+export const setOnUnauthorized = (callback: () => void) => {
+  onUnauthorizedCallback = callback;
+};
+
 // Attach Authorization Bearer token to requests
 api.interceptors.request.use((config) => {
-  const token = useAuthStore.getState().token;
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  if (currentToken) {
+    config.headers.Authorization = `Bearer ${currentToken}`;
   }
   return config;
 });
@@ -45,8 +49,8 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      useAuthStore.getState().logout();
+    if (error.response?.status === 401 && onUnauthorizedCallback) {
+      onUnauthorizedCallback();
     }
     return Promise.reject(error);
   }
