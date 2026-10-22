@@ -1,6 +1,12 @@
+import * as path from 'path';
+
 try {
-  process.loadEnvFile?.();
-} catch {}
+  process.loadEnvFile?.(path.resolve(__dirname, '../.env'));
+} catch {
+  try {
+    process.loadEnvFile?.();
+  } catch {}
+}
 
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
