@@ -1,10 +1,16 @@
+try {
+  process.loadEnvFile?.();
+} catch {}
+
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
-import { AppModule } from './app.module';
+import { AppModule, ObserveInstrument } from './app.module';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    instrument: ObserveInstrument,
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -18,4 +24,4 @@ async function bootstrap() {
   await app.listen(port);
   logger.log(`Flight Modular Monolith running on http://localhost:${port}`);
 }
-bootstrap();
+void bootstrap();

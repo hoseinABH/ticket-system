@@ -20,7 +20,7 @@ export const users = authSchema.table('users', {
 export const flightsSchema = pgSchema('flights');
 export const flights = flightsSchema.table('flights', {
   id: uuid('id').defaultRandom().primaryKey(),
-  flightNumber: varchar('flight_number', { length: 16 }).notNull(),
+  flightNumber: varchar('flight_number', { length: 16 }).notNull().unique(),
   origin: varchar('origin', { length: 3 }).notNull(), // e.g., 'THR'
   destination: varchar('destination', { length: 3 }).notNull(), // e.g., 'IST'
   departureTime: timestamp('departure_time').notNull(),
