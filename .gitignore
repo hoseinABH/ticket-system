@@ -1,9 +1,7 @@
-# compiled output
-/dist
-/node_modules
-/build
-
-# TypeScript build cache
+dist/
+node_modules/
+build/
+.expo/
 *.tsbuildinfo
 
 # Logs
