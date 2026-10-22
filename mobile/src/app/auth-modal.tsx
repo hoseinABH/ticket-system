@@ -56,7 +56,7 @@ export default function AuthModal() {
         <View>
           {/* Top Close Bar */}
           <View className="flex-row items-center justify-between pb-4 border-b border-slate-800">
-            <View className="flex-row items-center space-x-2">
+            <View className="flex-row items-center gap-x-2">
               <View className="w-8 h-8 rounded-full bg-cyan-500/15 items-center justify-center border border-cyan-400/30">
                 <Plane size={16} color="#22D3EE" />
               </View>
@@ -107,13 +107,13 @@ export default function AuthModal() {
           </View>
 
           {/* Form Inputs */}
-          <View className="space-y-4">
+          <View className="gap-y-4">
             {/* Email */}
             <View>
               <Text className="text-xs font-semibold text-slate-300 mb-1.5">
                 Email Address
               </Text>
-              <View className="flex-row items-center space-x-2 px-3.5 py-3 rounded-2xl bg-navy-900 border border-slate-800">
+              <View className="flex-row items-center gap-x-2 px-3.5 py-3 rounded-2xl bg-navy-900 border border-slate-800">
                 <Mail size={16} color="#94A3B8" />
                 <TextInput
                   value={email}
@@ -132,7 +132,7 @@ export default function AuthModal() {
               <Text className="text-xs font-semibold text-slate-300 mb-1.5">
                 Password
               </Text>
-              <View className="flex-row items-center space-x-2 px-3.5 py-3 rounded-2xl bg-navy-900 border border-slate-800">
+              <View className="flex-row items-center gap-x-2 px-3.5 py-3 rounded-2xl bg-navy-900 border border-slate-800">
                 <Lock size={16} color="#94A3B8" />
                 <TextInput
                   value={password}

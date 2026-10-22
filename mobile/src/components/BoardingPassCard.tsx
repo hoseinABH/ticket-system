@@ -17,8 +17,8 @@ export const BoardingPassCard: React.FC<BoardingPassCardProps> = ({ booking }) =
   return (
     <View className="mb-5 rounded-3xl bg-navy-850 border border-slate-700/60 overflow-hidden shadow-xl shadow-black/50">
       {/* Top Banner */}
-      <View className="bg-gradient-to-r from-navy-800 to-navy-700 p-4 border-b border-slate-700/50 flex-row items-center justify-between">
-        <View className="flex-row items-center space-x-2">
+      <View className="bg-navy-800 p-4 border-b border-slate-700/50 flex-row items-center justify-between">
+        <View className="flex-row items-center gap-x-2">
           <View className="w-7 h-7 rounded-full bg-cyan-500/20 items-center justify-center border border-cyan-400/40">
             <Plane size={14} color="#22D3EE" />
           </View>
@@ -27,7 +27,7 @@ export const BoardingPassCard: React.FC<BoardingPassCardProps> = ({ booking }) =
           </Text>
         </View>
 
-        <View className="flex-row items-center space-x-1.5 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/30">
+        <View className="flex-row items-center gap-x-1.5 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/30">
           <CheckCircle2 size={12} color="#34D399" />
           <Text className="text-[11px] font-bold text-emerald-400 tracking-wide">
             {booking.status}
@@ -72,7 +72,7 @@ export const BoardingPassCard: React.FC<BoardingPassCardProps> = ({ booking }) =
             <Text className="text-[10px] text-slate-400 uppercase font-semibold">
               Passengers
             </Text>
-            <View className="flex-row items-center space-x-1 mt-1">
+            <View className="flex-row items-center gap-x-1 mt-1">
               <Users size={13} color="#94A3B8" />
               <Text className="text-sm font-bold text-slate-100">
                 {booking.seatCount} {booking.seatCount === 1 ? 'Seat' : 'Seats'}
@@ -84,7 +84,7 @@ export const BoardingPassCard: React.FC<BoardingPassCardProps> = ({ booking }) =
             <Text className="text-[10px] text-slate-400 uppercase font-semibold">
               Booked Date
             </Text>
-            <View className="flex-row items-center space-x-1 mt-1">
+            <View className="flex-row items-center gap-x-1 mt-1">
               <Calendar size={13} color="#94A3B8" />
               <Text className="text-sm font-bold text-slate-100">
                 {dateFormatted}
@@ -113,7 +113,7 @@ export const BoardingPassCard: React.FC<BoardingPassCardProps> = ({ booking }) =
       {/* Bottom Stub: Barcode Visual & Reference */}
       <View className="p-4 bg-navy-900/60 items-center">
         {/* Simulated Barcode */}
-        <View className="flex-row items-center justify-center space-x-1 h-9 opacity-70">
+        <View className="flex-row items-center justify-center gap-x-1 h-9 opacity-70">
           <View className="w-1 h-full bg-slate-300" />
           <View className="w-2 h-full bg-slate-300" />
           <View className="w-0.5 h-full bg-slate-300" />

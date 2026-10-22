@@ -51,7 +51,7 @@ export default function ProfileTab() {
         {/* User Card */}
         {token && user ? (
           <View className="rounded-3xl bg-navy-850 border border-slate-800 p-5 mb-5 shadow-lg shadow-black/50">
-            <View className="flex-row items-center space-x-3.5">
+            <View className="flex-row items-center gap-x-3.5">
               <View className="w-14 h-14 rounded-2xl bg-cyan-500/15 border border-cyan-400/30 items-center justify-center">
                 <User size={26} color="#22D3EE" />
               </View>
@@ -59,7 +59,7 @@ export default function ProfileTab() {
                 <Text className="text-base font-black text-white">
                   {user.email}
                 </Text>
-                <View className="flex-row items-center space-x-1.5 mt-1">
+                <View className="flex-row items-center gap-x-1.5 mt-1">
                   <ShieldCheck size={13} color="#34D399" />
                   <Text className="text-xs font-semibold text-emerald-400">
                     Verified Passenger
@@ -71,7 +71,7 @@ export default function ProfileTab() {
             <TouchableOpacity
               activeOpacity={0.8}
               onPress={handleLogout}
-              className="mt-5 py-3 rounded-xl bg-rose-500/10 border border-rose-500/20 flex-row items-center justify-center space-x-2"
+              className="mt-5 py-3 rounded-xl bg-rose-500/10 border border-rose-500/20 flex-row items-center justify-center gap-x-2"
             >
               <LogOut size={16} color="#F43F5E" />
               <Text className="text-xs font-bold text-rose-400">
@@ -93,7 +93,7 @@ export default function ProfileTab() {
             <TouchableOpacity
               activeOpacity={0.85}
               onPress={() => router.push('/auth-modal')}
-              className="mt-4 px-6 py-3 rounded-xl bg-cyan-500 flex-row items-center space-x-2"
+              className="mt-4 px-6 py-3 rounded-xl bg-cyan-500 flex-row items-center gap-x-2"
             >
               <LogIn size={16} color="#070B14" strokeWidth={2.5} />
               <Text className="text-xs font-black text-navy-950 uppercase tracking-wider">
@@ -104,14 +104,14 @@ export default function ProfileTab() {
         )}
 
         {/* System & Architecture Info */}
-        <View className="rounded-3xl bg-navy-850/80 border border-slate-800/80 p-5 mb-5 space-y-4">
+        <View className="rounded-3xl bg-navy-850/80 border border-slate-800/80 p-5 mb-5 gap-y-4">
           <Text className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
             System & Infrastructure
           </Text>
 
           {/* Backend Connection URL */}
           <View className="flex-row items-center justify-between pb-3 border-b border-slate-800/70">
-            <View className="flex-row items-center space-x-2.5">
+            <View className="flex-row items-center gap-x-2.5">
               <Server size={16} color="#22D3EE" />
               <Text className="text-xs font-semibold text-slate-200">
                 Backend API
@@ -124,7 +124,7 @@ export default function ProfileTab() {
 
           {/* Ephemeral Pricing */}
           <View className="flex-row items-center justify-between pb-3 border-b border-slate-800/70">
-            <View className="flex-row items-center space-x-2.5">
+            <View className="flex-row items-center gap-x-2.5">
               <KeyRound size={16} color="#FBBF24" />
               <Text className="text-xs font-semibold text-slate-200">
                 Redis Fare Lock
@@ -137,7 +137,7 @@ export default function ProfileTab() {
 
           {/* Database */}
           <View className="flex-row items-center justify-between">
-            <View className="flex-row items-center space-x-2.5">
+            <View className="flex-row items-center gap-x-2.5">
               <ShieldCheck size={16} color="#34D399" />
               <Text className="text-xs font-semibold text-slate-200">
                 Persistence

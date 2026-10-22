@@ -149,7 +149,7 @@ export default function FlightsTab() {
 
           {/* Error State */}
           {error && !isLoading && (
-            <View className="rounded-2xl bg-rose-500/10 border border-rose-500/20 p-4 flex-row items-center space-x-3 mb-4">
+            <View className="rounded-2xl bg-rose-500/10 border border-rose-500/20 p-4 flex-row items-center gap-x-3 mb-4">
               <AlertCircle size={20} color="#F43F5E" />
               <View className="flex-1">
                 <Text className="text-xs font-bold text-rose-300">

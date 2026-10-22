@@ -18,10 +18,10 @@ export const SearchFlightBox: React.FC<SearchFlightBoxProps> = ({
     useFlightStore();
 
   return (
-    <View className="rounded-3xl bg-navy-850/90 border border-slate-800 p-5 shadow-2xl shadow-black/80">
+    <View className="rounded-3xl bg-navy-850 border border-slate-800 p-5 shadow-2xl shadow-black/80">
       {/* Airport Origin & Destination with Swap */}
       <View className="relative">
-        <View className="space-y-3">
+        <View className="gap-y-2.5">
           {/* Origin */}
           <View className="rounded-2xl bg-navy-900 border border-slate-800 p-3.5 pl-4">
             <Text className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
@@ -53,15 +53,16 @@ export const SearchFlightBox: React.FC<SearchFlightBoxProps> = ({
         <TouchableOpacity
           activeOpacity={0.8}
           onPress={swapAirports}
-          className="absolute right-6 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-cyan-500 items-center justify-center shadow-md shadow-cyan-500/40 border-2 border-navy-850"
+          style={{ top: '50%', marginTop: -18 }}
+          className="absolute right-5 w-9 h-9 rounded-full bg-cyan-500 items-center justify-center shadow-md shadow-cyan-500/40 border-2 border-navy-850 z-10"
         >
-          <ArrowRightLeft size={16} color="#070B14" strokeWidth={2.5} />
+          <ArrowRightLeft size={15} color="#070B14" strokeWidth={2.5} />
         </TouchableOpacity>
       </View>
 
       {/* Passengers & Seat Counter */}
-      <View className="mt-4 pt-3 border-t border-slate-800/80 flex-row items-center justify-between">
-        <View className="flex-row items-center space-x-2">
+      <View className="mt-4 pt-3.5 border-t border-slate-800/80 flex-row items-center justify-between">
+        <View className="flex-row items-center gap-x-2.5">
           <View className="w-8 h-8 rounded-lg bg-slate-800 items-center justify-center">
             <Users size={16} color="#94A3B8" />
           </View>
@@ -72,7 +73,7 @@ export const SearchFlightBox: React.FC<SearchFlightBoxProps> = ({
         </View>
 
         {/* Counter Buttons */}
-        <View className="flex-row items-center space-x-2 bg-navy-900 rounded-xl p-1 border border-slate-800">
+        <View className="flex-row items-center gap-x-1.5 bg-navy-900 rounded-xl p-1 border border-slate-800">
           <TouchableOpacity
             disabled={seatCount <= 1}
             onPress={() => setSeatCount(Math.max(1, seatCount - 1))}
@@ -98,11 +99,11 @@ export const SearchFlightBox: React.FC<SearchFlightBoxProps> = ({
       </View>
 
       {/* Action Buttons: Search & Seed */}
-      <View className="mt-4 space-y-2.5">
+      <View className="mt-4 gap-y-2.5">
         <TouchableOpacity
           activeOpacity={0.85}
           onPress={onSearch}
-          className="w-full py-3.5 rounded-2xl bg-cyan-500 flex-row items-center justify-center space-x-2 shadow-lg shadow-cyan-500/25"
+          className="w-full py-3.5 rounded-2xl bg-cyan-500 flex-row items-center justify-center gap-x-2 shadow-lg shadow-cyan-500/25"
         >
           <Search size={18} color="#070B14" strokeWidth={2.5} />
           <Text className="text-sm font-black text-navy-950 uppercase tracking-wider">
@@ -114,7 +115,7 @@ export const SearchFlightBox: React.FC<SearchFlightBoxProps> = ({
           activeOpacity={0.8}
           onPress={onSeed}
           disabled={isSeeding}
-          className="w-full py-2.5 rounded-xl bg-slate-800/80 border border-slate-700/60 flex-row items-center justify-center space-x-2"
+          className="w-full py-2.5 rounded-xl bg-slate-800/80 border border-slate-700/60 flex-row items-center justify-center gap-x-2"
         >
           <Sparkles size={14} color="#FBBF24" />
           <Text className="text-xs font-semibold text-slate-300">

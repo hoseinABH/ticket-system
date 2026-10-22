@@ -30,7 +30,7 @@ export const FlightCard: React.FC<FlightCardProps> = ({ flight, onSelect }) => {
     >
       {/* Top Header: Airline & Urgency Badge */}
       <View className="flex-row items-center justify-between pb-3 border-b border-slate-800/60">
-        <View className="flex-row items-center space-x-2">
+        <View className="flex-row items-center gap-x-2">
           <View className="w-8 h-8 rounded-lg bg-cyan-500/10 items-center justify-center border border-cyan-500/20">
             <Plane size={16} color="#22D3EE" />
           </View>
@@ -43,14 +43,14 @@ export const FlightCard: React.FC<FlightCardProps> = ({ flight, onSelect }) => {
         </View>
 
         {isLowSeats ? (
-          <View className="px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 flex-row items-center space-x-1">
+          <View className="px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 flex-row items-center gap-x-1">
             <Users size={12} color="#FBBF24" />
             <Text className="text-[11px] font-semibold text-amber-400">
               Only {flight.availableSeats} left
             </Text>
           </View>
         ) : (
-          <View className="px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700/60 flex-row items-center space-x-1">
+          <View className="px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700/60 flex-row items-center gap-x-1">
             <Users size={12} color="#94A3B8" />
             <Text className="text-[11px] font-medium text-slate-300">
               {flight.availableSeats} seats
@@ -62,7 +62,7 @@ export const FlightCard: React.FC<FlightCardProps> = ({ flight, onSelect }) => {
       {/* Origin, Trajectory, Destination */}
       <View className="flex-row items-center justify-between py-4">
         {/* Origin */}
-        <View className="items-start">
+        <View className="items-start min-w-[70px]">
           <Text className="text-2xl font-black text-white tracking-wider">
             {flight.origin}
           </Text>
@@ -70,22 +70,24 @@ export const FlightCard: React.FC<FlightCardProps> = ({ flight, onSelect }) => {
         </View>
 
         {/* Flight Path Graphic */}
-        <View className="flex-1 px-4 items-center">
-          <Text className="text-[10px] text-cyan-400 font-medium mb-1">
+        <View className="flex-1 px-3 items-center">
+          <Text className="text-[10px] text-cyan-400 font-medium mb-1.5">
             Non-stop · Direct
           </Text>
           <View className="flex-row items-center w-full justify-center">
             <View className="w-2 h-2 rounded-full bg-cyan-400" />
-            <View className="flex-1 h-[2px] bg-gradient-to-r from-cyan-500 via-cyan-400 to-cyan-500 opacity-60 mx-1" />
-            <Plane size={14} color="#22D3EE" className="rotate-90" />
-            <View className="flex-1 h-[2px] bg-gradient-to-r from-cyan-500 via-cyan-400 to-cyan-500 opacity-60 mx-1" />
+            <View className="flex-1 h-[2px] bg-cyan-500/40 mx-1.5" />
+            <View style={{ transform: [{ rotate: '90deg' }] }}>
+              <Plane size={14} color="#22D3EE" />
+            </View>
+            <View className="flex-1 h-[2px] bg-cyan-500/40 mx-1.5" />
             <View className="w-2 h-2 rounded-full border border-cyan-400 bg-navy-950" />
           </View>
-          <Text className="text-[10px] text-slate-500 mt-1">{dateFormatted}</Text>
+          <Text className="text-[10px] text-slate-500 mt-1.5">{dateFormatted}</Text>
         </View>
 
         {/* Destination */}
-        <View className="items-end">
+        <View className="items-end min-w-[70px]">
           <Text className="text-2xl font-black text-white tracking-wider">
             {flight.destination}
           </Text>
@@ -99,7 +101,7 @@ export const FlightCard: React.FC<FlightCardProps> = ({ flight, onSelect }) => {
           <Text className="text-[10px] text-slate-400 uppercase tracking-widest font-medium">
             From
           </Text>
-          <View className="flex-row items-baseline space-x-1">
+          <View className="flex-row items-baseline gap-x-1">
             <Text className="text-xl font-black text-amber-400">
               ${parseFloat(flight.basePrice).toFixed(0)}
             </Text>
@@ -107,7 +109,7 @@ export const FlightCard: React.FC<FlightCardProps> = ({ flight, onSelect }) => {
           </View>
         </View>
 
-        <View className="flex-row items-center space-x-1.5 px-4 py-2.5 rounded-xl bg-cyan-500">
+        <View className="flex-row items-center gap-x-1.5 px-4 py-2.5 rounded-xl bg-cyan-500">
           <Text className="text-xs font-bold text-navy-950">Select</Text>
           <ArrowRight size={14} color="#070B14" strokeWidth={2.5} />
         </View>

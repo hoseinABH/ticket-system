@@ -76,7 +76,7 @@ export default function BookingsTab() {
             <TouchableOpacity
               activeOpacity={0.85}
               onPress={() => router.push('/auth-modal')}
-              className="mt-6 px-7 py-3.5 rounded-2xl bg-cyan-500 flex-row items-center space-x-2 shadow-lg shadow-cyan-500/30"
+              className="mt-6 px-7 py-3.5 rounded-2xl bg-cyan-500 flex-row items-center gap-x-2 shadow-lg shadow-cyan-500/30"
             >
               <Text className="text-xs font-black text-navy-950 uppercase tracking-wider">
                 Sign In / Register

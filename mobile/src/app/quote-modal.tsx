@@ -101,7 +101,7 @@ export default function QuoteModal() {
       <View className="flex-1 px-5 pt-3">
         {/* Modal Top Bar */}
         <View className="flex-row items-center justify-between pb-4 border-b border-slate-800/80">
-          <View className="flex-row items-center space-x-2">
+          <View className="flex-row items-center gap-x-2">
             <View className="w-8 h-8 rounded-full bg-cyan-500/15 border border-cyan-400/30 items-center justify-center">
               <Plane size={16} color="#22D3EE" />
             </View>
@@ -120,7 +120,7 @@ export default function QuoteModal() {
 
         {/* Live Redis Lock Banner */}
         <View className="mt-4 rounded-2xl bg-amber-500/10 border border-amber-500/25 p-3.5 flex-row items-center justify-between">
-          <View className="flex-row items-center space-x-2.5">
+          <View className="flex-row items-center gap-x-2.5">
             <Clock size={18} color="#FBBF24" />
             <View>
               <Text className="text-xs font-bold text-amber-300">
@@ -150,7 +150,7 @@ export default function QuoteModal() {
                 {selectedFlight?.origin || 'THR'} → {selectedFlight?.destination || 'IST'}
               </Text>
             </View>
-            <View className="flex-row items-center space-x-1 px-2.5 py-1 rounded-full bg-slate-800">
+            <View className="flex-row items-center gap-x-1 px-2.5 py-1 rounded-full bg-slate-800">
               <Users size={12} color="#94A3B8" />
               <Text className="text-xs font-semibold text-slate-200">
                 {quote.seatCount} {quote.seatCount === 1 ? 'Passenger' : 'Passengers'}
@@ -159,7 +159,7 @@ export default function QuoteModal() {
           </View>
 
           {/* Pricing breakdown */}
-          <View className="mt-4 space-y-2.5">
+          <View className="mt-4 gap-y-2.5">
             <View className="flex-row items-center justify-between">
               <Text className="text-xs text-slate-400">Base Fare per Seat</Text>
               <Text className="text-xs font-semibold text-slate-200">
@@ -191,7 +191,7 @@ export default function QuoteModal() {
         </View>
 
         {/* Security badge */}
-        <View className="mt-4 flex-row items-center space-x-2 px-2">
+        <View className="mt-4 flex-row items-center gap-x-2 px-2">
           <ShieldCheck size={16} color="#34D399" />
           <Text className="text-xs text-slate-400">
             Atomic Redis single-use quote token protects against replay attacks.
@@ -203,7 +203,7 @@ export default function QuoteModal() {
 
         {/* Success or Action Button */}
         {isSuccess ? (
-          <View className="mb-6 p-4 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 flex-row items-center justify-center space-x-2">
+          <View className="mb-6 p-4 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 flex-row items-center justify-center gap-x-2">
             <CheckCircle2 size={20} color="#34D399" />
             <Text className="text-sm font-black text-emerald-400">
               Booking Confirmed! Generating Pass...
@@ -214,7 +214,7 @@ export default function QuoteModal() {
             activeOpacity={0.85}
             onPress={() => checkoutMutation.mutate()}
             disabled={checkoutMutation.isPending || timeLeft <= 0}
-            className={`mb-6 w-full py-4 rounded-2xl flex-row items-center justify-center space-x-2 shadow-xl ${
+            className={`mb-6 w-full py-4 rounded-2xl flex-row items-center justify-center gap-x-2 shadow-xl ${
               checkoutMutation.isPending
                 ? 'bg-slate-700'
                 : 'bg-cyan-500 shadow-cyan-500/30'
