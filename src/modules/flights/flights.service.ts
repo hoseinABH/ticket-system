@@ -9,9 +9,9 @@ import {
 import {
   and,
   asc,
-  count,
   eq,
   getTableColumns,
+  gt,
   inArray,
   isNull,
   sql,
@@ -87,26 +87,42 @@ export class FlightsService {
     });
   }
 
-  // availableSeats is computed from the seat rows, so the API response keeps
-  // the same shape it had when it was a stored counter
   async searchFlights(origin: string, destination: string) {
+    return this.searchFlightsQuery(origin, destination);
+  }
+
+  // availableSeats is computed from the seat rows, so the API response keeps
+  // the same shape it had when it was a stored counter.
+  //
+  // Shaped as "for each matching flight, count its free seats" (LATERAL)
+  // rather than JOIN + GROUP BY: the join form made Postgres scan every seat
+  // of every flight, while this form does one index-only scan of
+  // seats_free_by_flight_idx per flight (~30 ms -> ~2 ms on 600k seats).
+  // Public so the query-plan lab can EXPLAIN the exact query the app runs.
+  searchFlightsQuery(origin: string, destination: string) {
+    const free = this.db
+      .select({
+        availableSeats: sql<number>`count(*)::int`.as('available_seats'),
+      })
+      .from(seats)
+      .where(and(eq(seats.flightId, flights.id), isNull(seats.bookingId)))
+      .as('free');
+
     return this.db
       .select({
         ...getTableColumns(flights),
-        availableSeats: count(seats.id),
+        availableSeats: free.availableSeats,
       })
       .from(flights)
-      .innerJoin(
-        seats,
-        and(eq(seats.flightId, flights.id), isNull(seats.bookingId)),
-      )
+      .crossJoinLateral(free)
       .where(
         and(
           eq(flights.origin, origin.toUpperCase()),
           eq(flights.destination, destination.toUpperCase()),
+          gt(flights.departureTime, sql`now()`),
+          gt(free.availableSeats, 0),
         ),
       )
-      .groupBy(flights.id)
       .orderBy(asc(flights.departureTime));
   }
 

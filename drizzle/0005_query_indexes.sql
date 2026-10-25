@@ -1,0 +1,3 @@
+CREATE INDEX "bookings_user_id_created_at_idx" ON "bookings"."bookings" USING btree ("user_id","created_at");--> statement-breakpoint
+CREATE INDEX "flights_route_departure_idx" ON "flights"."flights" USING btree ("origin","destination","departure_time");--> statement-breakpoint
+CREATE INDEX "seats_free_by_flight_idx" ON "flights"."seats" USING btree ("flight_id") WHERE "flights"."seats"."booking_id" IS NULL;

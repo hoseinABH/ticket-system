@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { randomBytes, randomUUID } from 'crypto';
 import { DRIZZLE, type DrizzleDB } from '../../core/database/database.module';
 import { bookings } from '../../core/database/schema';
@@ -127,7 +127,8 @@ export class BookingsService {
     const userBookings = await this.db
       .select()
       .from(bookings)
-      .where(eq(bookings.userId, userId));
+      .where(eq(bookings.userId, userId))
+      .orderBy(desc(bookings.createdAt));
     const seatsByBooking = await this.flightsService.getSeatNumbersByBookingIds(
       userBookings.map((b) => b.id),
     );

@@ -25,16 +25,30 @@ export const users = authSchema.table('users', {
 
 // 2. Flights Schema
 export const flightsSchema = pgSchema('flights');
-export const flights = flightsSchema.table('flights', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  flightNumber: varchar('flight_number', { length: 16 }).notNull().unique(),
-  origin: varchar('origin', { length: 3 }).notNull(), // e.g., 'THR'
-  destination: varchar('destination', { length: 3 }).notNull(), // e.g., 'IST'
-  departureTime: timestamp('departure_time', { withTimezone: true }).notNull(),
-  basePrice: numeric('base_price', { precision: 10, scale: 2 }).notNull(),
-  // Optimistic concurrency: bumped on every edit, compared on every write
-  version: integer('version').notNull().default(1),
-});
+export const flights = flightsSchema.table(
+  'flights',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    flightNumber: varchar('flight_number', { length: 16 }).notNull().unique(),
+    origin: varchar('origin', { length: 3 }).notNull(), // e.g., 'THR'
+    destination: varchar('destination', { length: 3 }).notNull(), // e.g., 'IST'
+    departureTime: timestamp('departure_time', {
+      withTimezone: true,
+    }).notNull(),
+    basePrice: numeric('base_price', { precision: 10, scale: 2 }).notNull(),
+    // Optimistic concurrency: bumped on every edit, compared on every write
+    version: integer('version').notNull().default(1),
+  },
+  (table) => [
+    // Search: equality columns first, then the range/sort column, so one
+    // index serves the WHERE, the departure_time > now() range and ORDER BY
+    index('flights_route_departure_idx').on(
+      table.origin,
+      table.destination,
+      table.departureTime,
+    ),
+  ],
+);
 
 // One row per physical seat. Availability is derived from these rows rather
 // than kept in a separate counter that could drift out of sync.
@@ -55,6 +69,12 @@ export const seats = flightsSchema.table(
     ),
     // Cancellation and "my bookings" look seats up by booking
     index('seats_booking_id_idx').on(table.bookingId),
+    // Partial index holding only free seats: counting a flight's free seats
+    // becomes an index-only scan, and the index stays about a tenth of the
+    // size of one covering every seat
+    index('seats_free_by_flight_idx')
+      .on(table.flightId)
+      .where(sql`${table.bookingId} IS NULL`),
   ],
 );
 
@@ -83,6 +103,8 @@ export const bookings = bookingsSchema.table(
     cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
   },
   (table) => [
+    // "My bookings", newest first
+    index('bookings_user_id_created_at_idx').on(table.userId, table.createdAt),
     check('bookings_seat_count_positive', sql`${table.seatCount} > 0`),
     // A cancelled booking always records when, and only cancelled ones do
     check(
