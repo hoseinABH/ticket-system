@@ -1,10 +1,12 @@
-import { Module } from '@nestjs/common';
+import { Module, ValidationPipe } from '@nestjs/common';
+import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { createObserveModule } from '@nestjs/observe';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { validateEnv, type Env } from './core/config/env.js';
+import { AllExceptionsFilter } from './core/http/all-exceptions.filter.js';
 import { DatabaseModule } from './core/database/database.module.js';
 import { RedisModule } from './core/redis/redis.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
@@ -39,6 +41,19 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     NotificationsModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    // Registered here rather than in main.ts so tests that build the app
+    // from AppModule get the exact same validation and error handling
+    {
+      provide: APP_PIPE,
+      useValue: new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }),
+    },
+    { provide: APP_FILTER, useClass: AllExceptionsFilter },
+  ],
 })
 export class AppModule {}
