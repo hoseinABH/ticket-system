@@ -1,9 +1,11 @@
-import { Global, Inject, Module, OnModuleInit } from '@nestjs/common';
+import { Global, Inject, Module, OnModuleDestroy } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Pool } from 'pg';
 import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
 import * as schema from './schema';
-import { sql } from 'drizzle-orm';
+import type { Env } from '../config/env';
 
+export const PG_POOL = Symbol('PG_POOL');
 export const DRIZZLE = Symbol('DRIZZLE_CONNECTION');
 export type DrizzleDB = NodePgDatabase<typeof schema>;
 
@@ -11,21 +13,26 @@ export type DrizzleDB = NodePgDatabase<typeof schema>;
 @Module({
   providers: [
     {
+      provide: PG_POOL,
+      inject: [ConfigService],
+      useFactory: (config: ConfigService<Env, true>) =>
+        new Pool({
+          connectionString: config.get('DATABASE_URL', { infer: true }),
+        }),
+    },
+    {
       provide: DRIZZLE,
-      useFactory: () => {
-        const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-        return drizzle(pool, { schema });
-      },
+      inject: [PG_POOL],
+      useFactory: (pool: Pool) => drizzle(pool, { schema }),
     },
   ],
   exports: [DRIZZLE],
 })
-export class DatabaseModule implements OnModuleInit {
-  constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
+export class DatabaseModule implements OnModuleDestroy {
+  constructor(@Inject(PG_POOL) private readonly pool: Pool) {}
 
-  async onModuleInit() {
-    await this.db.execute(sql`CREATE SCHEMA IF NOT EXISTS auth;`);
-    await this.db.execute(sql`CREATE SCHEMA IF NOT EXISTS flights;`);
-    await this.db.execute(sql`CREATE SCHEMA IF NOT EXISTS bookings;`);
+  // Close idle connections so the process (and test runs) can exit cleanly
+  async onModuleDestroy() {
+    await this.pool.end();
   }
 }
