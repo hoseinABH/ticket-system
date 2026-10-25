@@ -4,6 +4,7 @@ import {
   BadRequestException,
   ConflictException,
   NotFoundException,
+  PreconditionFailedException,
 } from '@nestjs/common';
 import {
   and,
@@ -118,6 +119,51 @@ export class FlightsService {
       throw new NotFoundException('Flight not found');
     }
     return flight;
+  }
+
+  // Optimistic concurrency: the write succeeds only if the row is still at
+  // the version the client read. No lock is held between the client's GET
+  // and this PATCH, which may be minutes apart; a conflicting edit in
+  // between simply makes this UPDATE match zero rows.
+  async updateFlight(
+    flightId: string,
+    expectedVersion: number,
+    changes: { departureTime?: string; basePrice?: string },
+  ) {
+    if (
+      changes.departureTime === undefined &&
+      changes.basePrice === undefined
+    ) {
+      throw new BadRequestException('Provide departureTime and/or basePrice');
+    }
+    if (changes.basePrice !== undefined && Number(changes.basePrice) <= 0) {
+      throw new BadRequestException('basePrice must be positive');
+    }
+
+    const [updated] = await this.db
+      .update(flights)
+      .set({
+        ...(changes.departureTime !== undefined && {
+          departureTime: new Date(changes.departureTime),
+        }),
+        ...(changes.basePrice !== undefined && {
+          basePrice: changes.basePrice,
+        }),
+        version: sql`${flights.version} + 1`,
+      })
+      .where(
+        and(eq(flights.id, flightId), eq(flights.version, expectedVersion)),
+      )
+      .returning();
+
+    if (!updated) {
+      // Zero rows: either the flight is gone or someone edited it first
+      const current = await this.getFlightById(flightId);
+      throw new PreconditionFailedException(
+        `Flight was modified by someone else (now at version ${current.version}); reload and retry`,
+      );
+    }
+    return updated;
   }
 
   // Seat map for clients. Exposes only whether a seat is free, never which

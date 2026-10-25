@@ -32,6 +32,8 @@ export const flights = flightsSchema.table('flights', {
   destination: varchar('destination', { length: 3 }).notNull(), // e.g., 'IST'
   departureTime: timestamp('departure_time', { withTimezone: true }).notNull(),
   basePrice: numeric('base_price', { precision: 10, scale: 2 }).notNull(),
+  // Optimistic concurrency: bumped on every edit, compared on every write
+  version: integer('version').notNull().default(1),
 });
 
 // One row per physical seat. Availability is derived from these rows rather
