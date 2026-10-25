@@ -24,11 +24,9 @@ export interface TestContext {
 // with the schema built by the same migrations production would run.
 export async function createTestApp(): Promise<TestContext> {
   const [postgres, redis] = await Promise.all([
-    new PostgreSqlContainer('postgres:16-alpine').start(),
+    startMigratedPostgres(),
     new RedisContainer('redis:7-alpine').start(),
   ]);
-
-  await runMigrations(postgres);
 
   process.env.NODE_ENV = 'test';
   process.env.DATABASE_URL = postgres.getConnectionUri();
@@ -57,13 +55,16 @@ export async function createTestApp(): Promise<TestContext> {
   };
 }
 
-async function runMigrations(postgres: StartedPostgreSqlContainer) {
+// A throwaway Postgres with every migration applied
+export async function startMigratedPostgres(): Promise<StartedPostgreSqlContainer> {
+  const postgres = await new PostgreSqlContainer('postgres:16-alpine').start();
   const pool = new Pool({ connectionString: postgres.getConnectionUri() });
   try {
     await migrate(drizzle(pool), { migrationsFolder: './drizzle' });
   } finally {
     await pool.end();
   }
+  return postgres;
 }
 
 async function stopContainers(
