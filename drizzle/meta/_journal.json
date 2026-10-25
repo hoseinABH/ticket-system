@@ -43,6 +43,13 @@
       "when": 1792920455842,
       "tag": "0005_query_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792921168823,
+      "tag": "0006_idempotency_keys",
+      "breakpoints": true
     }
   ]
 }

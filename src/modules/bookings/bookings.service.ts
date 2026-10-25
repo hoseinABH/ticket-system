@@ -3,12 +3,15 @@ import {
   Inject,
   ConflictException,
   NotFoundException,
+  UnprocessableEntityException,
+  Logger,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { randomBytes, randomUUID } from 'crypto';
 import { DRIZZLE, type DrizzleDB } from '../../core/database/database.module';
-import { bookings } from '../../core/database/schema';
+import { bookings, idempotencyKeys } from '../../core/database/schema';
+import { fingerprint } from '../../core/http/idempotency';
 import { FlightsService } from '../flights/flights.service';
 import {
   BookingEvents,
@@ -17,22 +20,75 @@ import {
 } from './booking.events';
 import { canTransition, statusesThatCanBecome } from './domain/booking-status';
 
+// The booking as returned by checkout (and replayed from storage), in its
+// JSON form: dates are ISO strings
+export interface CheckoutResponse {
+  id: string;
+  userId: string;
+  flightId: string;
+  pnr: string;
+  seatCount: number;
+  totalLockedPrice: string;
+  status: string;
+  createdAt: string;
+  cancelledAt: string | null;
+  seatNumbers: string[];
+}
+
 @Injectable()
 export class BookingsService {
+  private readonly logger = new Logger(BookingsService.name);
+
   constructor(
     @Inject(DRIZZLE) private readonly db: DrizzleDB,
     private readonly flightsService: FlightsService,
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
-  async checkout(userId: string, quoteToken: string) {
-    // 1. Atomically pop the ephemeral quote token from Redis
-    const quote = await this.flightsService.consumeFareQuote(quoteToken);
+  // Idempotent checkout: the first request with a given key books; any
+  // retry with the same key gets the original response back instead.
+  async checkout(
+    userId: string,
+    quoteToken: string,
+    idempotencyKey: string,
+  ): Promise<{ booking: CheckoutResponse; replayed: boolean }> {
+    const requestHash = fingerprint({ quoteToken });
 
-    // 2. Run seat assignment and booking insertion in one ACID transaction.
-    //    The ID is generated up front so the seats can point at the booking.
-    const bookingId = randomUUID();
-    const confirmedBooking = await this.db.transaction(async (tx) => {
+    const result = await this.db.transaction(async (tx) => {
+      // 1. Claim the key. A concurrent request holding the same key makes
+      //    this INSERT wait on the primary key until that request commits
+      //    (we then replay its result) or rolls back (we then proceed).
+      const [claimed] = await tx
+        .insert(idempotencyKeys)
+        .values({ userId, key: idempotencyKey, requestHash })
+        .onConflictDoNothing()
+        .returning();
+
+      if (!claimed) {
+        const [existing] = await tx
+          .select()
+          .from(idempotencyKeys)
+          .where(
+            and(
+              eq(idempotencyKeys.userId, userId),
+              eq(idempotencyKeys.key, idempotencyKey),
+            ),
+          );
+        if (existing.requestHash !== requestHash) {
+          throw new UnprocessableEntityException(
+            'This Idempotency-Key was already used for a different request',
+          );
+        }
+        return {
+          booking: existing.response as CheckoutResponse,
+          replayed: true as const,
+        };
+      }
+
+      // 2. First time this key is seen: book. Any failure below rolls back
+      //    the key claim too, so a retry with the same key starts fresh.
+      const quote = await this.flightsService.getFareQuote(quoteToken);
+      const bookingId = randomUUID(); // up front, so seats can point at it
       await this.flightsService.assignSeatsInTransaction(
         tx as unknown as DrizzleDB,
         quote.flightId,
@@ -41,7 +97,6 @@ export class BookingsService {
       );
 
       const pnr = randomBytes(3).toString('hex').toUpperCase();
-
       const [created] = await tx
         .insert(bookings)
         .values({
@@ -55,20 +110,52 @@ export class BookingsService {
         })
         .returning();
 
-      return { ...created, seatNumbers: quote.seatNumbers };
+      // 3. Record the response in the same transaction as the booking
+      // Stored as JSON, exactly as it will be serialized to the client, so
+      // a replay is byte-for-byte the response the first request returned
+      const response = JSON.parse(
+        JSON.stringify({ ...created, seatNumbers: quote.seatNumbers }),
+      ) as CheckoutResponse;
+      await tx
+        .update(idempotencyKeys)
+        .set({ response })
+        .where(
+          and(
+            eq(idempotencyKeys.userId, userId),
+            eq(idempotencyKeys.key, idempotencyKey),
+          ),
+        );
+
+      return {
+        booking: response,
+        replayed: false as const,
+        flightNumber: quote.flightNumber,
+      };
     });
 
-    // 3. Emit asynchronous domain event for NotificationsModule
+    if (result.replayed) {
+      return { booking: result.booking, replayed: true };
+    }
+
+    // 4. Side effects only after commit, and only for the original request.
+    //    The booking is already committed, so a failure here must not turn
+    //    the response into an error: a leftover quote expires on its own and
+    //    cannot book seats that are now taken.
+    await this.flightsService
+      .deleteFareQuote(quoteToken)
+      .catch((error) =>
+        this.logger.warn(`Could not delete used quote: ${String(error)}`),
+      );
     this.eventEmitter.emit(BookingEvents.Confirmed, {
-      bookingId: confirmedBooking.id,
+      bookingId: result.booking.id,
       userId,
-      pnr: confirmedBooking.pnr,
-      flightNumber: quote.flightNumber,
-      seatNumbers: confirmedBooking.seatNumbers,
-      totalPrice: confirmedBooking.totalLockedPrice,
+      pnr: result.booking.pnr,
+      flightNumber: result.flightNumber,
+      seatNumbers: result.booking.seatNumbers,
+      totalPrice: result.booking.totalLockedPrice,
     } satisfies BookingConfirmedEvent);
 
-    return confirmedBooking;
+    return { booking: result.booking, replayed: false };
   }
 
   async cancel(userId: string, bookingId: string) {

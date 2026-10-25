@@ -2,12 +2,14 @@ import { sql } from 'drizzle-orm';
 import {
   check,
   index,
+  jsonb,
   pgSchema,
   uuid,
   varchar,
   timestamp,
   integer,
   numeric,
+  primaryKey,
   unique,
 } from 'drizzle-orm/pg-core';
 import { BOOKING_STATUSES } from '../../modules/bookings/domain/booking-status';
@@ -112,4 +114,22 @@ export const bookings = bookingsSchema.table(
       sql`(${table.status} = 'CANCELLED') = (${table.cancelledAt} IS NOT NULL)`,
     ),
   ],
+);
+
+// Outcome of each successful checkout, keyed by the client's Idempotency-Key.
+// Written in the same transaction as the booking, so a key exists if and
+// only if its booking does. Keys are scoped per user.
+export const idempotencyKeys = bookingsSchema.table(
+  'idempotency_keys',
+  {
+    userId: uuid('user_id').notNull(),
+    key: varchar('key', { length: 128 }).notNull(),
+    requestHash: varchar('request_hash', { length: 64 }).notNull(),
+    // Set before the transaction commits; never NULL once visible to others
+    response: jsonb('response'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.key] })],
 );

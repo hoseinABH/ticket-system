@@ -248,15 +248,23 @@ export class FlightsService {
     return { quoteToken, quote: payload };
   }
 
-  // Atomically retrieve and delete the quote token so it cannot be replayed
-  async consumeFareQuote(quoteToken: string): Promise<FareQuotePayload> {
-    const raw = await this.redis.getdel(`fare_quote:${quoteToken}`);
+  // Read, not consumed: the quote is deleted only after the booking commits,
+  // so a checkout that fails part-way leaves the quote usable for a retry
+  async getFareQuote(quoteToken: string): Promise<FareQuotePayload> {
+    const raw = await this.redis.get(`fare_quote:${quoteToken}`);
     if (!raw) {
       throw new BadRequestException(
         'Fare quote token is invalid, expired, or already used',
       );
     }
     return JSON.parse(raw) as FareQuotePayload;
+  }
+
+  // Called after a successful checkout. Single use is a convenience here,
+  // not a safety net: a second checkout of the same quote would fail anyway,
+  // because its seats are already assigned.
+  async deleteFareQuote(quoteToken: string) {
+    await this.redis.del(`fare_quote:${quoteToken}`);
   }
 
   // Exposed for BookingsModule to call inside an active Postgres transaction.

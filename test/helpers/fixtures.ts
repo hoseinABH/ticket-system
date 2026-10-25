@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import request from 'supertest';
 import { and, count, eq, isNull } from 'drizzle-orm';
 import { flights, seats } from '../../src/core/database/schema';
@@ -61,10 +62,18 @@ export async function createQuote(
   return res.body.quoteToken as string;
 }
 
-export function checkout(ctx: TestContext, token: string, quoteToken: string) {
+// Sends a fresh Idempotency-Key unless one is given (pass the same key to
+// simulate a client retrying the same purchase)
+export function checkout(
+  ctx: TestContext,
+  token: string,
+  quoteToken: string,
+  idempotencyKey: string = randomUUID(),
+) {
   return request(ctx.app.getHttpServer())
     .post('/bookings/checkout')
     .auth(token, { type: 'bearer' })
+    .set('Idempotency-Key', idempotencyKey)
     .send({ quoteToken });
 }
 
