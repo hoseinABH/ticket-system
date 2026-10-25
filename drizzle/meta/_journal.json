@@ -50,6 +50,13 @@
       "when": 1792921168823,
       "tag": "0006_idempotency_keys",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792922625295,
+      "tag": "0007_outbox_and_notifications",
+      "breakpoints": true
     }
   ]
 }

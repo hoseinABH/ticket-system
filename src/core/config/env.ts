@@ -10,6 +10,9 @@ export const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3000),
   DATABASE_URL: z.url(),
   REDIS_URL: z.url().default('redis://localhost:6379'),
+  RABBITMQ_URL: z.url().default('amqp://localhost:5672'),
+  // How often the outbox relay looks for unpublished events
+  OUTBOX_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(1000),
   // HS256 needs a key at least as long as its 256-bit output to be safe
   JWT_SECRET: z.string().min(32, 'must be at least 32 characters'),
   JWT_EXPIRES_IN_SECONDS: z.coerce.number().int().positive().default(3600),

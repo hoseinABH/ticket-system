@@ -6,12 +6,12 @@ import {
   UnprocessableEntityException,
   Logger,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { randomBytes, randomUUID } from 'crypto';
 import { DRIZZLE, type DrizzleDB } from '../../core/database/database.module';
 import { bookings, idempotencyKeys } from '../../core/database/schema';
 import { fingerprint } from '../../core/http/idempotency';
+import { OutboxService } from '../../core/outbox/outbox.service';
 import { FlightsService } from '../flights/flights.service';
 import {
   BookingEvents,
@@ -42,7 +42,7 @@ export class BookingsService {
   constructor(
     @Inject(DRIZZLE) private readonly db: DrizzleDB,
     private readonly flightsService: FlightsService,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly outbox: OutboxService,
   ) {}
 
   // Idempotent checkout: the first request with a given key books; any
@@ -126,35 +126,36 @@ export class BookingsService {
           ),
         );
 
-      return {
-        booking: response,
-        replayed: false as const,
-        flightNumber: quote.flightNumber,
-      };
+      // 4. The event commits with the booking, or not at all
+      await this.outbox.enqueue(
+        tx as unknown as DrizzleDB,
+        BookingEvents.Confirmed,
+        {
+          bookingId: response.id,
+          userId,
+          pnr: response.pnr,
+          flightNumber: quote.flightNumber,
+          seatNumbers: response.seatNumbers,
+          totalPrice: response.totalLockedPrice,
+        } satisfies BookingConfirmedEvent,
+      );
+
+      return { booking: response, replayed: false as const };
     });
 
     if (result.replayed) {
       return { booking: result.booking, replayed: true };
     }
 
-    // 4. Side effects only after commit, and only for the original request.
-    //    The booking is already committed, so a failure here must not turn
-    //    the response into an error: a leftover quote expires on its own and
-    //    cannot book seats that are now taken.
+    // 5. Clean-up after commit, only for the original request. The booking
+    //    is already committed, so a failure here must not turn the response
+    //    into an error: a leftover quote expires on its own and cannot book
+    //    seats that are now taken.
     await this.flightsService
       .deleteFareQuote(quoteToken)
       .catch((error) =>
         this.logger.warn(`Could not delete used quote: ${String(error)}`),
       );
-    this.eventEmitter.emit(BookingEvents.Confirmed, {
-      bookingId: result.booking.id,
-      userId,
-      pnr: result.booking.pnr,
-      flightNumber: result.flightNumber,
-      seatNumbers: result.booking.seatNumbers,
-      totalPrice: result.booking.totalLockedPrice,
-    } satisfies BookingConfirmedEvent);
-
     return { booking: result.booking, replayed: false };
   }
 
@@ -196,16 +197,20 @@ export class BookingsService {
         tx as unknown as DrizzleDB,
         updated.id,
       );
+
+      await this.outbox.enqueue(
+        tx as unknown as DrizzleDB,
+        BookingEvents.Cancelled,
+        {
+          bookingId: updated.id,
+          userId,
+          pnr: updated.pnr,
+          seatNumbers: releasedSeats,
+          refundAmount: updated.totalLockedPrice,
+        } satisfies BookingCancelledEvent,
+      );
       return { ...updated, seatNumbers: releasedSeats };
     });
-
-    this.eventEmitter.emit(BookingEvents.Cancelled, {
-      bookingId: cancelled.id,
-      userId,
-      pnr: cancelled.pnr,
-      seatNumbers: cancelled.seatNumbers,
-      refundAmount: cancelled.totalLockedPrice,
-    } satisfies BookingCancelledEvent);
 
     return cancelled;
   }

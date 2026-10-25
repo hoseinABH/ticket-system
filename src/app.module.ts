@@ -2,13 +2,14 @@ import { Module, ValidationPipe } from '@nestjs/common';
 import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { createObserveModule } from '@nestjs/observe';
-import { EventEmitterModule } from '@nestjs/event-emitter';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { validateEnv, type Env } from './core/config/env.js';
 import { AllExceptionsFilter } from './core/http/all-exceptions.filter.js';
 import { DatabaseModule } from './core/database/database.module.js';
 import { RedisModule } from './core/redis/redis.module.js';
+import { MessagingModule } from './core/messaging/messaging.module.js';
+import { OutboxModule } from './core/outbox/outbox.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { FlightsModule } from './modules/flights/flights.module.js';
 import { BookingsModule } from './modules/bookings/bookings.module.js';
@@ -32,9 +33,10 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
         serviceId: 'ticket-system',
       }),
     }),
-    EventEmitterModule.forRoot(),
     DatabaseModule,
     RedisModule,
+    MessagingModule,
+    OutboxModule,
     AuthModule,
     FlightsModule,
     BookingsModule,

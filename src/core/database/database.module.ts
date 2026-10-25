@@ -1,4 +1,4 @@
-import { Global, Inject, Module, OnModuleDestroy } from '@nestjs/common';
+import { Global, Inject, Module, OnApplicationShutdown } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Pool } from 'pg';
 import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
@@ -28,11 +28,13 @@ export type DrizzleDB = NodePgDatabase<typeof schema>;
   ],
   exports: [DRIZZLE],
 })
-export class DatabaseModule implements OnModuleDestroy {
+export class DatabaseModule implements OnApplicationShutdown {
   constructor(@Inject(PG_POOL) private readonly pool: Pool) {}
 
-  // Close idle connections so the process (and test runs) can exit cleanly
-  async onModuleDestroy() {
+  // Close connections so the process (and test runs) can exit cleanly. Runs
+  // in the last shutdown phase, after background workers (outbox relay,
+  // consumers) have stopped in onModuleDestroy and released theirs.
+  async onApplicationShutdown() {
     await this.pool.end();
   }
 }

@@ -10,6 +10,7 @@ import {
   integer,
   numeric,
   primaryKey,
+  text,
   unique,
 } from 'drizzle-orm/pg-core';
 import { BOOKING_STATUSES } from '../../modules/bookings/domain/booking-status';
@@ -133,3 +134,43 @@ export const idempotencyKeys = bookingsSchema.table(
   },
   (table) => [primaryKey({ columns: [table.userId, table.key] })],
 );
+
+// 4. Outbox Schema
+// Events written in the same transaction as the state change they describe,
+// then published to RabbitMQ by the outbox relay. A row exists if and only if
+// its business change committed, so no event is ever lost or invented.
+export const outboxSchema = pgSchema('outbox');
+export const outboxMessages = outboxSchema.table(
+  'messages',
+  {
+    id: uuid('id').defaultRandom().primaryKey(), // becomes the AMQP messageId
+    type: varchar('type', { length: 100 }).notNull(), // routing key, e.g. 'booking.confirmed'
+    payload: jsonb('payload').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    publishedAt: timestamp('published_at', { withTimezone: true }),
+  },
+  (table) => [
+    // The relay only ever looks for unpublished rows, oldest first
+    index('outbox_messages_unpublished_idx')
+      .on(table.createdAt)
+      .where(sql`${table.publishedAt} IS NULL`),
+  ],
+);
+
+// 5. Notifications Schema
+// One row per notification sent. message_id is UNIQUE so that a redelivered
+// event (at-least-once delivery) cannot notify the customer twice.
+export const notificationsSchema = pgSchema('notifications');
+export const notifications = notificationsSchema.table('notifications', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  messageId: uuid('message_id').notNull().unique(),
+  type: varchar('type', { length: 100 }).notNull(),
+  userId: uuid('user_id').notNull(),
+  bookingId: uuid('booking_id').notNull(),
+  body: text('body').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
