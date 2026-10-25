@@ -57,6 +57,20 @@
       "when": 1792922625295,
       "tag": "0007_outbox_and_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792926432651,
+      "tag": "0008_payment_saga_expand",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792926444982,
+      "tag": "0009_payment_saga_contract",
+      "breakpoints": true
     }
   ]
 }

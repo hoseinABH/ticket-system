@@ -104,10 +104,19 @@ export const bookings = bookingsSchema.table(
       .defaultNow()
       .notNull(),
     cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+    // The provider's charge ID, set when payment succeeds
+    paymentId: varchar('payment_id', { length: 64 }),
   },
   (table) => [
     // "My bookings", newest first
     index('bookings_user_id_created_at_idx').on(table.userId, table.createdAt),
+    // The payment reconciler: oldest bookings in a given status
+    index('bookings_status_created_at_idx').on(table.status, table.createdAt),
+    // Money first: a booking can only be CONFIRMED once a charge exists
+    check(
+      'bookings_confirmed_has_payment',
+      sql`${table.status} <> 'CONFIRMED' OR ${table.paymentId} IS NOT NULL`,
+    ),
     check('bookings_seat_count_positive', sql`${table.seatCount} > 0`),
     // A cancelled booking always records when, and only cancelled ones do
     check(
@@ -117,17 +126,17 @@ export const bookings = bookingsSchema.table(
   ],
 );
 
-// Outcome of each successful checkout, keyed by the client's Idempotency-Key.
-// Written in the same transaction as the booking, so a key exists if and
-// only if its booking does. Keys are scoped per user.
+// Which booking each checkout Idempotency-Key created. Written in the same
+// transaction as the booking, so a key exists if and only if its booking
+// does. A replay returns that booking's *current* state, which may have moved
+// on (e.g. PENDING_PAYMENT -> CONFIRMED). Keys are scoped per user.
 export const idempotencyKeys = bookingsSchema.table(
   'idempotency_keys',
   {
     userId: uuid('user_id').notNull(),
     key: varchar('key', { length: 128 }).notNull(),
     requestHash: varchar('request_hash', { length: 64 }).notNull(),
-    // Set before the transaction commits; never NULL once visible to others
-    response: jsonb('response'),
+    bookingId: uuid('booking_id').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true })
       .defaultNow()
       .notNull(),

@@ -1,17 +1,35 @@
-import { canTransition, statusesThatCanBecome } from './booking-status';
+import {
+  BOOKING_STATUSES,
+  canTransition,
+  statusesThatCanBecome,
+} from './booking-status';
 
 describe('booking status state machine', () => {
-  it('allows cancelling a confirmed booking', () => {
-    expect(canTransition('CONFIRMED', 'CANCELLED')).toBe(true);
+  it('settles a pending booking either way', () => {
+    expect(canTransition('PENDING_PAYMENT', 'CONFIRMED')).toBe(true);
+    expect(canTransition('PENDING_PAYMENT', 'PAYMENT_FAILED')).toBe(true);
   });
 
-  it('treats CANCELLED as terminal', () => {
-    expect(canTransition('CANCELLED', 'CANCELLED')).toBe(false);
-    expect(canTransition('CANCELLED', 'CONFIRMED')).toBe(false);
-  });
-
-  it('lists the source statuses for a target status', () => {
+  it('only cancels confirmed bookings', () => {
     expect(statusesThatCanBecome('CANCELLED')).toEqual(['CONFIRMED']);
-    expect(statusesThatCanBecome('CONFIRMED')).toEqual([]);
+    expect(canTransition('PENDING_PAYMENT', 'CANCELLED')).toBe(false);
+  });
+
+  it('confirms or fails only from PENDING_PAYMENT', () => {
+    expect(statusesThatCanBecome('CONFIRMED')).toEqual(['PENDING_PAYMENT']);
+    expect(statusesThatCanBecome('PAYMENT_FAILED')).toEqual([
+      'PENDING_PAYMENT',
+    ]);
+  });
+
+  it('treats CANCELLED and PAYMENT_FAILED as terminal', () => {
+    for (const to of BOOKING_STATUSES) {
+      expect(canTransition('CANCELLED', to)).toBe(false);
+      expect(canTransition('PAYMENT_FAILED', to)).toBe(false);
+    }
+  });
+
+  it('never returns to PENDING_PAYMENT', () => {
+    expect(statusesThatCanBecome('PENDING_PAYMENT')).toEqual([]);
   });
 });

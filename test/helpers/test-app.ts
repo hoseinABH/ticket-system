@@ -46,6 +46,9 @@ export async function createTestApp(
     JWT_SECRET: 'test-secret-that-is-at-least-32-characters',
     // Publish events quickly so tests do not wait long for them
     OUTBOX_POLL_INTERVAL_MS: '50',
+    // Give up on the payment provider quickly; reconcile often
+    PAYMENT_TIMEOUT_MS: '200',
+    PAYMENT_RECONCILE_INTERVAL_MS: '100',
   };
 
   const ctx = {

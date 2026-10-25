@@ -3,6 +3,7 @@ import request from 'supertest';
 import { and, count, eq, isNull } from 'drizzle-orm';
 import { flights, seats } from '../../src/core/database/schema';
 import { generateSeatNumbers } from '../../src/modules/flights/domain/seat-layout';
+import { TestCards } from '../../src/modules/payments/fake-payment-provider';
 import type { TestContext } from './test-app';
 
 export async function registerAndLogin(ctx: TestContext, email: string) {
@@ -63,18 +64,20 @@ export async function createQuote(
 }
 
 // Sends a fresh Idempotency-Key unless one is given (pass the same key to
-// simulate a client retrying the same purchase)
+// simulate a client retrying the same purchase), and pays with a card that
+// succeeds unless another test card is given
 export function checkout(
   ctx: TestContext,
   token: string,
   quoteToken: string,
   idempotencyKey: string = randomUUID(),
+  paymentToken: string = TestCards.Visa,
 ) {
   return request(ctx.app.getHttpServer())
     .post('/bookings/checkout')
     .auth(token, { type: 'bearer' })
     .set('Idempotency-Key', idempotencyKey)
-    .send({ quoteToken });
+    .send({ quoteToken, paymentToken });
 }
 
 // Quote + checkout in one step; returns the created booking

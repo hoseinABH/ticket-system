@@ -3,6 +3,7 @@
 export const BookingEvents = {
   Confirmed: 'booking.confirmed',
   Cancelled: 'booking.cancelled',
+  PaymentFailed: 'booking.payment_failed',
 } as const;
 
 export interface BookingConfirmedEvent {
@@ -20,4 +21,12 @@ export interface BookingCancelledEvent {
   pnr: string;
   seatNumbers: string[];
   refundAmount: string;
+}
+
+export interface BookingPaymentFailedEvent {
+  bookingId: string;
+  userId: string;
+  pnr: string;
+  seatNumbers: string[];
+  reason: string;
 }

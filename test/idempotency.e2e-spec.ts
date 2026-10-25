@@ -61,13 +61,20 @@ describe('Idempotent checkout (e2e)', () => {
       Array.from({ length: 10 }, () => checkout(ctx, alice, quote, key)),
     );
 
-    expect(responses.map((r) => r.status)).toEqual(responses.map(() => 201));
+    // Duplicates that arrive while the first request is still charging the
+    // card replay a booking that is honestly still PENDING_PAYMENT (202).
+    // Replays report current state, not a frozen copy of the first answer.
+    for (const r of responses) {
+      expect([201, 202]).toContain(r.status);
+    }
     const bookingIds = new Set(responses.map((r) => r.body.id));
     expect(bookingIds.size).toBe(1);
     const replays = responses.filter(
       (r) => r.headers['idempotent-replayed'] === 'true',
     );
     expect(replays).toHaveLength(9);
+    const [booked] = await bookingsOn(flight.id);
+    expect(booked.status).toBe('CONFIRMED');
     expect(await bookingsOn(flight.id)).toHaveLength(1);
   });
 
@@ -152,11 +159,13 @@ describe('Idempotent checkout (e2e)', () => {
         .post('/bookings/checkout')
         .auth(alice, { type: 'bearer' });
 
-    const missing = await http().send({ quoteToken: quote }).expect(400);
+    const missing = await http()
+      .send({ quoteToken: quote, paymentToken: 'tok_visa' })
+      .expect(400);
     expect(missing.body.message).toMatch(/Idempotency-Key header is required/);
     await http()
       .set('Idempotency-Key', 'bad key!')
-      .send({ quoteToken: quote })
+      .send({ quoteToken: quote, paymentToken: 'tok_visa' })
       .expect(400);
     expect(await bookingsOn(flight.id)).toHaveLength(0);
   });

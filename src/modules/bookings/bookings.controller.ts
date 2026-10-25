@@ -11,6 +11,7 @@ import {
   HttpStatus,
   Headers,
   Res,
+  HttpException,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiHeader, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
@@ -46,12 +47,26 @@ export class BookingsController {
     const { booking, replayed } = await this.bookingsService.checkout(
       req.user.userId,
       dto.quoteToken,
+      dto.paymentToken,
       parseIdempotencyKey(idempotencyKey),
     );
     if (replayed) {
       res.setHeader(IDEMPOTENT_REPLAYED_HEADER, 'true');
     }
-    return booking;
+    // The status code tells the client where the saga ended up
+    switch (booking.status) {
+      case 'PENDING_PAYMENT':
+        // Payment outcome not known yet: accepted, check back later
+        res.status(HttpStatus.ACCEPTED);
+        return booking;
+      case 'PAYMENT_FAILED':
+        throw new HttpException(
+          `Payment was declined; booking ${booking.id} did not go through`,
+          HttpStatus.PAYMENT_REQUIRED,
+        );
+      default:
+        return booking;
+    }
   }
 
   @Get('my-bookings')

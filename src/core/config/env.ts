@@ -20,6 +20,15 @@ export const envSchema = z.object({
     .default('1000,5000,30000')
     .transform((value) => value.split(',').map(Number))
     .pipe(z.array(z.number().int().positive()).min(1)),
+  // How long checkout waits for the payment provider before treating the
+  // outcome as unknown and leaving it to the reconciler
+  PAYMENT_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+  // How often the reconciler settles bookings stuck in PENDING_PAYMENT
+  PAYMENT_RECONCILE_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(10_000),
   // HS256 needs a key at least as long as its 256-bit output to be safe
   JWT_SECRET: z.string().min(32, 'must be at least 32 characters'),
   JWT_EXPIRES_IN_SECONDS: z.coerce.number().int().positive().default(3600),

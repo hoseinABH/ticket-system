@@ -60,10 +60,10 @@ describe('Query-plan lab (e2e)', () => {
         FROM flights.seats s WHERE s.seat_number ~ '[AB]$'
       ), inserted AS (
         INSERT INTO bookings.bookings
-          (id, user_id, flight_id, pnr, seat_count, total_locked_price, status, created_at)
+          (id, user_id, flight_id, pnr, seat_count, total_locked_price, status, created_at, payment_id)
         SELECT booking_id, md5('user' || (n % 1000))::uuid, flight_id,
                upper(lpad(to_hex(n), 8, '0')), 1, 100, 'CONFIRMED',
-               now() - (n % 500) * interval '1 hour'
+               now() - (n % 500) * interval '1 hour', 'ch_lab_' || n
         FROM pick
       )
       UPDATE flights.seats s SET booking_id = p.booking_id

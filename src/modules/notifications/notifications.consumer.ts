@@ -29,10 +29,13 @@ import {
   BookingEvents,
   type BookingCancelledEvent,
   type BookingConfirmedEvent,
+  type BookingPaymentFailedEvent,
 } from '../bookings/booking.events';
 
 type BookingEvent =
-  EventEnvelope<BookingConfirmedEvent> | EventEnvelope<BookingCancelledEvent>;
+  | EventEnvelope<BookingConfirmedEvent>
+  | EventEnvelope<BookingCancelledEvent>
+  | EventEnvelope<BookingPaymentFailedEvent>;
 
 @Injectable()
 export class NotificationsConsumer
@@ -140,6 +143,10 @@ export class NotificationsConsumer
       case BookingEvents.Cancelled: {
         const p = event.payload as BookingCancelledEvent;
         return `[Booking Cancelled] PNR: ${p.pnr} | Seats released: ${p.seatNumbers.join(', ')} | Refund: $${p.refundAmount}`;
+      }
+      case BookingEvents.PaymentFailed: {
+        const p = event.payload as BookingPaymentFailedEvent;
+        return `[Payment Failed] PNR: ${p.pnr} | Seats released: ${p.seatNumbers.join(', ')} | Reason: ${p.reason}`;
       }
       default:
         throw new Error(`Unknown event type ${event.type}`);

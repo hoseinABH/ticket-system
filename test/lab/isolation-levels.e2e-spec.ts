@@ -231,8 +231,8 @@ describe('Isolation-level lab (e2e)', () => {
     async function insertBooking(client: Pool | PoolClient, flight: string) {
       await client.query(
         `INSERT INTO bookings.bookings
-           (user_id, flight_id, pnr, seat_count, total_locked_price, status)
-         VALUES ($1, $2, $3, 1, 100, 'CONFIRMED')`,
+           (user_id, flight_id, pnr, seat_count, total_locked_price, status, payment_id)
+         VALUES ($1, $2, $3, 1, 100, 'CONFIRMED', 'ch_lab')`,
         [user, flight, randomBytes(3).toString('hex').toUpperCase()],
       );
     }

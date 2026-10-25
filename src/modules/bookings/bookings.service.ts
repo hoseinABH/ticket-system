@@ -14,26 +14,21 @@ import { fingerprint } from '../../core/http/idempotency';
 import { OutboxService } from '../../core/outbox/outbox.service';
 import { FlightsService } from '../flights/flights.service';
 import {
+  PaymentsService,
+  type PaymentOutcome,
+} from '../payments/payments.service';
+import {
   BookingEvents,
   type BookingCancelledEvent,
   type BookingConfirmedEvent,
+  type BookingPaymentFailedEvent,
 } from './booking.events';
 import { canTransition, statusesThatCanBecome } from './domain/booking-status';
 
-// The booking as returned by checkout (and replayed from storage), in its
-// JSON form: dates are ISO strings
-export interface CheckoutResponse {
-  id: string;
-  userId: string;
-  flightId: string;
-  pnr: string;
-  seatCount: number;
-  totalLockedPrice: string;
-  status: string;
-  createdAt: string;
-  cancelledAt: string | null;
+// A booking as the API returns it
+export type BookingView = typeof bookings.$inferSelect & {
   seatNumbers: string[];
-}
+};
 
 @Injectable()
 export class BookingsService {
@@ -42,25 +37,31 @@ export class BookingsService {
   constructor(
     @Inject(DRIZZLE) private readonly db: DrizzleDB,
     private readonly flightsService: FlightsService,
+    private readonly payments: PaymentsService,
     private readonly outbox: OutboxService,
   ) {}
 
-  // Idempotent checkout: the first request with a given key books; any
-  // retry with the same key gets the original response back instead.
+  // Checkout as a saga: local transaction, remote call, local transaction.
+  // The payment call happens with no transaction open: holding row locks
+  // while waiting on another company's servers would stall every booking
+  // that touches the same seats for as long as they take to answer.
   async checkout(
     userId: string,
     quoteToken: string,
+    paymentToken: string,
     idempotencyKey: string,
-  ): Promise<{ booking: CheckoutResponse; replayed: boolean }> {
-    const requestHash = fingerprint({ quoteToken });
+  ): Promise<{ booking: BookingView; replayed: boolean }> {
+    const requestHash = fingerprint({ quoteToken, paymentToken });
+    const bookingId = randomUUID(); // up front: the key, seats and charge all use it
 
-    const result = await this.db.transaction(async (tx) => {
-      // 1. Claim the key. A concurrent request holding the same key makes
-      //    this INSERT wait on the primary key until that request commits
-      //    (we then replay its result) or rolls back (we then proceed).
+    // Saga step 1 (local transaction): claim the key and hold the seats
+    const reservation = await this.db.transaction(async (tx) => {
+      // A concurrent request holding the same key makes this INSERT wait on
+      // the primary key until that request commits (we then replay its
+      // booking) or rolls back (we then proceed).
       const [claimed] = await tx
         .insert(idempotencyKeys)
-        .values({ userId, key: idempotencyKey, requestHash })
+        .values({ userId, key: idempotencyKey, requestHash, bookingId })
         .onConflictDoNothing()
         .returning();
 
@@ -79,84 +80,145 @@ export class BookingsService {
             'This Idempotency-Key was already used for a different request',
           );
         }
-        return {
-          booking: existing.response as CheckoutResponse,
-          replayed: true as const,
-        };
+        return { replayed: true as const, bookingId: existing.bookingId };
       }
 
-      // 2. First time this key is seen: book. Any failure below rolls back
-      //    the key claim too, so a retry with the same key starts fresh.
+      // Any failure below rolls back the key claim too, so a retry with the
+      // same key starts fresh
       const quote = await this.flightsService.getFareQuote(quoteToken);
-      const bookingId = randomUUID(); // up front, so seats can point at it
       await this.flightsService.assignSeatsInTransaction(
         tx as unknown as DrizzleDB,
         quote.flightId,
         quote.seatNumbers,
         bookingId,
       );
-
-      const pnr = randomBytes(3).toString('hex').toUpperCase();
-      const [created] = await tx
-        .insert(bookings)
-        .values({
-          id: bookingId,
-          userId,
-          flightId: quote.flightId,
-          pnr,
-          seatCount: quote.seatNumbers.length,
-          totalLockedPrice: quote.totalPrice,
-          status: 'CONFIRMED',
-        })
-        .returning();
-
-      // 3. Record the response in the same transaction as the booking
-      // Stored as JSON, exactly as it will be serialized to the client, so
-      // a replay is byte-for-byte the response the first request returned
-      const response = JSON.parse(
-        JSON.stringify({ ...created, seatNumbers: quote.seatNumbers }),
-      ) as CheckoutResponse;
-      await tx
-        .update(idempotencyKeys)
-        .set({ response })
-        .where(
-          and(
-            eq(idempotencyKeys.userId, userId),
-            eq(idempotencyKeys.key, idempotencyKey),
-          ),
-        );
-
-      // 4. The event commits with the booking, or not at all
-      await this.outbox.enqueue(
-        tx as unknown as DrizzleDB,
-        BookingEvents.Confirmed,
-        {
-          bookingId: response.id,
-          userId,
-          pnr: response.pnr,
-          flightNumber: quote.flightNumber,
-          seatNumbers: response.seatNumbers,
-          totalPrice: response.totalLockedPrice,
-        } satisfies BookingConfirmedEvent,
-      );
-
-      return { booking: response, replayed: false as const };
+      await tx.insert(bookings).values({
+        id: bookingId,
+        userId,
+        flightId: quote.flightId,
+        pnr: randomBytes(3).toString('hex').toUpperCase(),
+        seatCount: quote.seatNumbers.length,
+        totalLockedPrice: quote.totalPrice,
+        status: 'PENDING_PAYMENT', // seats held, not yet paid for
+      });
+      return { replayed: false as const, quote };
     });
 
-    if (result.replayed) {
-      return { booking: result.booking, replayed: true };
+    // A replay returns the booking's current state, which may have moved on
+    // since the original request (e.g. PENDING_PAYMENT -> CONFIRMED)
+    if (reservation.replayed) {
+      return {
+        booking: await this.getBookingView(reservation.bookingId),
+        replayed: true,
+      };
     }
 
-    // 5. Clean-up after commit, only for the original request. The booking
-    //    is already committed, so a failure here must not turn the response
-    //    into an error: a leftover quote expires on its own and cannot book
-    //    seats that are now taken.
+    // The seats are held, so the quote has done its job. A failed delete
+    // must not fail the request: a leftover quote expires on its own and
+    // cannot book seats that are now taken.
     await this.flightsService
       .deleteFareQuote(quoteToken)
       .catch((error) =>
         this.logger.warn(`Could not delete used quote: ${String(error)}`),
       );
-    return { booking: result.booking, replayed: false };
+
+    // Saga step 2 (remote call): charge the card
+    const outcome = await this.payments.charge(
+      bookingId,
+      reservation.quote.totalPrice,
+      paymentToken,
+    );
+
+    // Saga step 3 (local transaction): confirm, or compensate. An unknown
+    // outcome leaves the booking PENDING_PAYMENT for the reconciler.
+    await this.settlePayment(bookingId, outcome);
+
+    return { booking: await this.getBookingView(bookingId), replayed: false };
+  }
+
+  // Applies a payment outcome to a booking still in PENDING_PAYMENT. Called
+  // by checkout and by the reconciler, possibly at the same time: the
+  // conditional UPDATE lets exactly one of them settle the booking, and any
+  // later call matches no row and does nothing. Returns whether it settled.
+  async settlePayment(
+    bookingId: string,
+    outcome: PaymentOutcome,
+  ): Promise<boolean> {
+    if (outcome.status === 'unknown') {
+      return false;
+    }
+    const to = outcome.status === 'succeeded' ? 'CONFIRMED' : 'PAYMENT_FAILED';
+
+    return this.db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(bookings)
+        .set({
+          status: to,
+          ...(outcome.status === 'succeeded' && {
+            paymentId: outcome.chargeId,
+          }),
+        })
+        .where(
+          and(
+            eq(bookings.id, bookingId),
+            inArray(bookings.status, statusesThatCanBecome(to)),
+          ),
+        )
+        .returning();
+      if (!updated) {
+        return false; // already settled by someone else
+      }
+
+      if (outcome.status === 'succeeded') {
+        const flight = await this.flightsService.getFlightById(
+          updated.flightId,
+        );
+        const seatsByBooking =
+          await this.flightsService.getSeatNumbersByBookingIds([updated.id]);
+        await this.outbox.enqueue(
+          tx as unknown as DrizzleDB,
+          BookingEvents.Confirmed,
+          {
+            bookingId: updated.id,
+            userId: updated.userId,
+            pnr: updated.pnr,
+            flightNumber: flight.flightNumber,
+            seatNumbers: seatsByBooking.get(updated.id) ?? [],
+            totalPrice: updated.totalLockedPrice,
+          } satisfies BookingConfirmedEvent,
+        );
+        return true;
+      }
+
+      // Compensation: undo saga step 1 by giving the held seats back
+      const releasedSeats = await this.flightsService.releaseSeatsInTransaction(
+        tx as unknown as DrizzleDB,
+        updated.id,
+      );
+      await this.outbox.enqueue(
+        tx as unknown as DrizzleDB,
+        BookingEvents.PaymentFailed,
+        {
+          bookingId: updated.id,
+          userId: updated.userId,
+          pnr: updated.pnr,
+          seatNumbers: releasedSeats,
+          reason: outcome.reason,
+        } satisfies BookingPaymentFailedEvent,
+      );
+      return true;
+    });
+  }
+
+  async getBookingView(bookingId: string): Promise<BookingView> {
+    const [booking] = await this.db
+      .select()
+      .from(bookings)
+      .where(eq(bookings.id, bookingId));
+    const seatsByBooking = await this.flightsService.getSeatNumbersByBookingIds(
+      [bookingId],
+    );
+    return { ...booking, seatNumbers: seatsByBooking.get(bookingId) ?? [] };
   }
 
   async cancel(userId: string, bookingId: string) {
