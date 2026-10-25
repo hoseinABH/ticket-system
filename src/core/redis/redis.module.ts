@@ -1,5 +1,7 @@
 import { Global, Module, OnModuleDestroy, Inject } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
+import type { Env } from '../config/env';
 
 export const REDIS = Symbol('REDIS_CLIENT');
 
@@ -8,8 +10,9 @@ export const REDIS = Symbol('REDIS_CLIENT');
   providers: [
     {
       provide: REDIS,
-      useFactory: () =>
-        new Redis(process.env.REDIS_URL || 'redis://localhost:6379'),
+      inject: [ConfigService],
+      useFactory: (config: ConfigService<Env, true>) =>
+        new Redis(config.get('REDIS_URL', { infer: true })),
     },
   ],
   exports: [REDIS],

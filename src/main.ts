@@ -1,17 +1,16 @@
-try {
-  process.loadEnvFile?.();
-} catch {}
-
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule, ObserveInstrument } from './app.module';
+import type { Env } from './core/config/env';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const app = await NestFactory.create(AppModule, {
     instrument: ObserveInstrument,
   });
+  app.enableShutdownHooks();
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -33,7 +32,9 @@ async function bootstrap() {
     { swaggerOptions: { persistAuthorization: true } },
   );
 
-  const port = process.env.PORT || 3000;
+  const port = app
+    .get<ConfigService<Env, true>>(ConfigService)
+    .get('PORT', { infer: true });
   await app.listen(port);
   logger.log(`Flight Modular Monolith running on http://localhost:${port}`);
   logger.log(`Swagger UI available at http://localhost:${port}/docs`);

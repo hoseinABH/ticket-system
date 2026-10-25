@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { AuthCredentialsDto } from './dto/auth.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import type { AuthenticatedUser } from './jwt.strategy';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -22,7 +23,7 @@ export class AuthController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Post('logout')
-  logout(@Req() req: { user: { jti: string } }) {
-    return this.authService.logout(req.user.jti);
+  logout(@Req() req: { user: AuthenticatedUser }) {
+    return this.authService.logout(req.user.jti, req.user.exp);
   }
 }

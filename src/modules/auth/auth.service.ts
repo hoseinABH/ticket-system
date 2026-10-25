@@ -60,9 +60,12 @@ export class AuthService {
     return { accessToken, user: { id: user.id, email: user.email } };
   }
 
-  async logout(jti: string) {
-    // Store revoked token ID in Redis with a 1-hour TTL matching JWT expiration
-    await this.redis.set(`bl:${jti}`, 'revoked', 'EX', 3600);
+  async logout(jti: string, exp: number) {
+    // Blocklist the token only until it would have expired anyway
+    const ttlSeconds = exp - Math.floor(Date.now() / 1000);
+    if (ttlSeconds > 0) {
+      await this.redis.set(`bl:${jti}`, 'revoked', 'EX', ttlSeconds);
+    }
     return { message: 'Logged out successfully' };
   }
 }
