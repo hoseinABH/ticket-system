@@ -1,7 +1,12 @@
 import request from 'supertest';
 import { eq, sql } from 'drizzle-orm';
-import { bookings, flights } from '../src/core/database/schema';
-import { book, createFlight, registerAndLogin } from './helpers/fixtures';
+import { bookings, flights, seats } from '../src/core/database/schema';
+import {
+  book,
+  createFlight,
+  freeSeatCount,
+  registerAndLogin,
+} from './helpers/fixtures';
 import { createTestApp, type TestContext } from './helpers/test-app';
 
 describe('Booking cancellation (e2e)', () => {
@@ -25,24 +30,17 @@ describe('Booking cancellation (e2e)', () => {
       .auth(token, { type: 'bearer' });
   }
 
-  async function seatsLeft(flightId: string) {
-    const [flight] = await ctx.db
-      .select()
-      .from(flights)
-      .where(eq(flights.id, flightId));
-    return flight.availableSeats;
-  }
-
   it('cancels a booking and returns its seats', async () => {
     const flight = await createFlight(ctx, 'CX-001', 10);
-    const booking = await book(ctx, owner, flight.id, 3);
-    expect(await seatsLeft(flight.id)).toBe(7);
+    const booking = await book(ctx, owner, flight.id, ['1A', '1B', '1C']);
+    expect(await freeSeatCount(ctx, flight.id)).toBe(7);
 
     const res = await cancel(owner, booking.id).expect(200);
 
     expect(res.body.status).toBe('CANCELLED');
+    expect(res.body.seatNumbers).toEqual(['1A', '1B', '1C']);
     expect(res.body.cancelledAt).toBeDefined();
-    expect(await seatsLeft(flight.id)).toBe(10);
+    expect(await freeSeatCount(ctx, flight.id)).toBe(10);
   });
 
   async function sessionsWaitingOnLocks() {
@@ -55,7 +53,7 @@ describe('Booking cancellation (e2e)', () => {
 
   it('releases seats exactly once when concurrent cancels race', async () => {
     const flight = await createFlight(ctx, 'CX-002', 10);
-    const booking = await book(ctx, owner, flight.id, 2);
+    const booking = await book(ctx, owner, flight.id, ['1A', '1B']);
     const racers = 5;
 
     // Firing requests at once is not enough to prove anything: the first one
@@ -86,13 +84,15 @@ describe('Booking cancellation (e2e)', () => {
 
     expect(statuses.filter((s) => s === 200)).toHaveLength(1);
     expect(statuses.filter((s) => s === 409)).toHaveLength(racers - 1);
-    // 10 - 2 booked + 2 released once. A double release would exceed 10.
-    expect(await seatsLeft(flight.id)).toBe(10);
+    // Releasing seats is idempotent (it frees rows WHERE booking_id = id),
+    // so a double cancel no longer inflates availability; the status
+    // assertions above are what catch it
+    expect(await freeSeatCount(ctx, flight.id)).toBe(10);
   });
 
   it("hides other users' bookings behind a 404", async () => {
     const flight = await createFlight(ctx, 'CX-003', 10);
-    const booking = await book(ctx, owner, flight.id, 1);
+    const booking = await book(ctx, owner, flight.id, ['1A']);
 
     await cancel(stranger, booking.id).expect(404);
 
@@ -105,7 +105,7 @@ describe('Booking cancellation (e2e)', () => {
 
   it('refuses to cancel after departure', async () => {
     const flight = await createFlight(ctx, 'CX-004', 10);
-    const booking = await book(ctx, owner, flight.id, 1);
+    const booking = await book(ctx, owner, flight.id, ['1A']);
     await ctx.db
       .update(flights)
       .set({ departureTime: new Date(Date.now() - 60_000) })
@@ -120,21 +120,18 @@ describe('Booking cancellation (e2e)', () => {
   });
 
   describe('database constraints (defense in depth)', () => {
-    it('rejects negative seat counts on flights', async () => {
+    it('rejects a duplicate seat number on the same flight', async () => {
       const flight = await createFlight(ctx, 'CX-005', 1);
       await expect(
-        ctx.db
-          .update(flights)
-          .set({ availableSeats: -1 })
-          .where(eq(flights.id, flight.id)),
+        ctx.db.insert(seats).values({ flightId: flight.id, seatNumber: '1A' }),
       ).rejects.toMatchObject({
-        cause: { constraint: 'flights_available_seats_non_negative' },
+        cause: { constraint: 'seats_flight_id_seat_number_unique' },
       });
     });
 
     it('rejects CANCELLED without cancelled_at', async () => {
       const flight = await createFlight(ctx, 'CX-006', 10);
-      const booking = await book(ctx, owner, flight.id, 1);
+      const booking = await book(ctx, owner, flight.id, ['1A']);
       await expect(
         ctx.db
           .update(bookings)

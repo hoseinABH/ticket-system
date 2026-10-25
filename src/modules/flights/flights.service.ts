@@ -2,19 +2,30 @@ import {
   Injectable,
   Inject,
   BadRequestException,
+  ConflictException,
   NotFoundException,
 } from '@nestjs/common';
-import { and, eq, gt, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  eq,
+  getTableColumns,
+  inArray,
+  isNull,
+  sql,
+} from 'drizzle-orm';
 import Redis from 'ioredis';
 import { randomUUID } from 'crypto';
 import { DRIZZLE, type DrizzleDB } from '../../core/database/database.module';
 import { REDIS } from '../../core/redis/redis.module';
-import { flights } from '../../core/database/schema';
+import { flights, seats } from '../../core/database/schema';
+import { generateSeatNumbers } from './domain/seat-layout';
 
 export interface FareQuotePayload {
   flightId: string;
   flightNumber: string;
-  seatCount: number;
+  seatNumbers: string[];
   totalPrice: string;
   expiresAt: number;
 }
@@ -30,44 +41,72 @@ export class FlightsService {
   async seedSampleFlights() {
     const sampleData = [
       {
-        flightNumber: 'IR-711',
-        origin: 'THR',
-        destination: 'IST',
-        departureTime: new Date(Date.now() + 86400000 * 2),
-        availableSeats: 50,
-        basePrice: '185.00',
+        capacity: 50,
+        flight: {
+          flightNumber: 'IR-711',
+          origin: 'THR',
+          destination: 'IST',
+          departureTime: new Date(Date.now() + 86400000 * 2),
+          basePrice: '185.00',
+        },
       },
       {
-        flightNumber: 'TK-875',
-        origin: 'THR',
-        destination: 'IST',
-        departureTime: new Date(Date.now() + 86400000 * 3),
-        availableSeats: 12,
-        basePrice: '240.50',
+        capacity: 12,
+        flight: {
+          flightNumber: 'TK-875',
+          origin: 'THR',
+          destination: 'IST',
+          departureTime: new Date(Date.now() + 86400000 * 3),
+          basePrice: '240.50',
+        },
       },
     ];
 
-    return this.db
-      .insert(flights)
-      .values(sampleData)
-      .onConflictDoNothing({ target: flights.flightNumber })
-      .returning();
+    return this.db.transaction(async (tx) => {
+      const created = await tx
+        .insert(flights)
+        .values(sampleData.map((s) => s.flight))
+        .onConflictDoNothing({ target: flights.flightNumber })
+        .returning();
+
+      // Seats only for flights this call actually inserted
+      const seatRows = created.flatMap((flight) => {
+        const { capacity } = sampleData.find(
+          (s) => s.flight.flightNumber === flight.flightNumber,
+        )!;
+        return generateSeatNumbers(capacity).map((seatNumber) => ({
+          flightId: flight.id,
+          seatNumber,
+        }));
+      });
+      if (seatRows.length > 0) {
+        await tx.insert(seats).values(seatRows);
+      }
+      return created;
+    });
   }
 
+  // availableSeats is computed from the seat rows, so the API response keeps
+  // the same shape it had when it was a stored counter
   async searchFlights(origin: string, destination: string) {
-    const normalizedOrigin = origin.toUpperCase();
-    const normalizedDest = destination.toUpperCase();
-
     return this.db
-      .select()
+      .select({
+        ...getTableColumns(flights),
+        availableSeats: count(seats.id),
+      })
       .from(flights)
+      .innerJoin(
+        seats,
+        and(eq(seats.flightId, flights.id), isNull(seats.bookingId)),
+      )
       .where(
         and(
-          eq(flights.origin, normalizedOrigin),
-          eq(flights.destination, normalizedDest),
-          gt(flights.availableSeats, 0),
+          eq(flights.origin, origin.toUpperCase()),
+          eq(flights.destination, destination.toUpperCase()),
         ),
-      );
+      )
+      .groupBy(flights.id)
+      .orderBy(asc(flights.departureTime));
   }
 
   async getFlightById(flightId: string) {
@@ -81,21 +120,59 @@ export class FlightsService {
     return flight;
   }
 
+  // Seat map for clients. Exposes only whether a seat is free, never which
+  // booking holds it.
+  async getSeatMap(flightId: string) {
+    await this.getFlightById(flightId);
+    const rows = await this.db
+      .select({ seatNumber: seats.seatNumber, bookingId: seats.bookingId })
+      .from(seats)
+      .where(eq(seats.flightId, flightId))
+      .orderBy(sql`length(${seats.seatNumber})`, asc(seats.seatNumber));
+    return rows.map(({ seatNumber, bookingId }) => ({
+      seatNumber,
+      available: bookingId === null,
+    }));
+  }
+
   // Create a 15-minute ephemeral lookup token in Redis locking the calculated price
-  async createFareQuote(flightId: string, seatCount: number) {
+  async createFareQuote(flightId: string, seatNumbers: string[]) {
     const flight = await this.getFlightById(flightId);
-    if (flight.availableSeats < seatCount) {
+
+    // A friendly early check only: the seats can still be taken by someone
+    // else before checkout, which re-checks them under a lock
+    const found = await this.db
+      .select({ seatNumber: seats.seatNumber, bookingId: seats.bookingId })
+      .from(seats)
+      .where(
+        and(
+          eq(seats.flightId, flightId),
+          inArray(seats.seatNumber, seatNumbers),
+        ),
+      );
+    const unknown = seatNumbers.filter(
+      (n) => !found.some((s) => s.seatNumber === n),
+    );
+    if (unknown.length > 0) {
       throw new BadRequestException(
-        `Only ${flight.availableSeats} seats remaining`,
+        `Seats do not exist on this flight: ${unknown.join(', ')}`,
+      );
+    }
+    const taken = found.filter((s) => s.bookingId !== null);
+    if (taken.length > 0) {
+      throw new ConflictException(
+        `Seats already taken: ${taken.map((s) => s.seatNumber).join(', ')}`,
       );
     }
 
-    const totalPrice = (Number(flight.basePrice) * seatCount).toFixed(2);
+    const totalPrice = (Number(flight.basePrice) * seatNumbers.length).toFixed(
+      2,
+    );
     const quoteToken = `quote_${randomUUID()}`;
     const payload: FareQuotePayload = {
       flightId: flight.id,
       flightNumber: flight.flightNumber,
-      seatCount,
+      seatNumbers,
       totalPrice,
       expiresAt: Date.now() + 15 * 60 * 1000,
     };
@@ -120,38 +197,76 @@ export class FlightsService {
     return JSON.parse(raw) as FareQuotePayload;
   }
 
-  // Exposed for BookingsModule to call inside an active Postgres transaction
-  async reserveSeatsInTransaction(
+  // Exposed for BookingsModule to call inside an active Postgres transaction.
+  // Locks only the requested seats, so bookings for other seats on the same
+  // flight proceed in parallel instead of queueing on the flight row.
+  async assignSeatsInTransaction(
     tx: DrizzleDB,
     flightId: string,
-    seatCount: number,
+    seatNumbers: string[],
+    bookingId: string,
   ) {
-    const [lockedFlight] = await tx
+    // ORDER BY makes every transaction acquire row locks in the same order.
+    // Without a global order, two bookings wanting {1A, 1B} and {1B, 1A}
+    // could each lock one seat and wait forever for the other (deadlock).
+    const locked = await tx
       .select()
-      .from(flights)
-      .where(eq(flights.id, flightId))
+      .from(seats)
+      .where(
+        and(
+          eq(seats.flightId, flightId),
+          inArray(seats.seatNumber, seatNumbers),
+        ),
+      )
+      .orderBy(asc(seats.seatNumber))
       .for('update');
 
-    if (!lockedFlight || lockedFlight.availableSeats < seatCount) {
-      throw new BadRequestException('Requested seats are no longer available');
+    const taken = locked.filter((s) => s.bookingId !== null);
+    if (locked.length !== seatNumbers.length || taken.length > 0) {
+      throw new ConflictException(
+        'One or more requested seats are no longer available',
+      );
     }
 
     await tx
-      .update(flights)
-      .set({ availableSeats: sql`${flights.availableSeats} - ${seatCount}` })
-      .where(eq(flights.id, flightId));
+      .update(seats)
+      .set({ bookingId })
+      .where(
+        inArray(
+          seats.id,
+          locked.map((s) => s.id),
+        ),
+      );
   }
 
-  // Exposed for BookingsModule to return seats inside its cancel transaction.
-  // A single atomic UPDATE needs no explicit lock: Postgres row-locks it.
-  async releaseSeatsInTransaction(
-    tx: DrizzleDB,
-    flightId: string,
-    seatCount: number,
-  ) {
-    await tx
-      .update(flights)
-      .set({ availableSeats: sql`${flights.availableSeats} + ${seatCount}` })
-      .where(eq(flights.id, flightId));
+  // Exposed for BookingsModule to free seats inside its cancel transaction.
+  // Returns the released seat numbers.
+  async releaseSeatsInTransaction(tx: DrizzleDB, bookingId: string) {
+    const released = await tx
+      .update(seats)
+      .set({ bookingId: null })
+      .where(eq(seats.bookingId, bookingId))
+      .returning({ seatNumber: seats.seatNumber });
+    return released.map((s) => s.seatNumber);
+  }
+
+  // One query for any number of bookings, instead of one query per booking
+  // (the N+1 problem)
+  async getSeatNumbersByBookingIds(
+    bookingIds: string[],
+  ): Promise<Map<string, string[]>> {
+    const result = new Map<string, string[]>();
+    if (bookingIds.length === 0) {
+      return result;
+    }
+    const rows = await this.db
+      .select({ bookingId: seats.bookingId, seatNumber: seats.seatNumber })
+      .from(seats)
+      .where(inArray(seats.bookingId, bookingIds))
+      .orderBy(asc(seats.seatNumber));
+    for (const { bookingId, seatNumber } of rows) {
+      result.set(bookingId!, [...(result.get(bookingId!) ?? []), seatNumber]);
+    }
+    return result;
   }
 }

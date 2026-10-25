@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { and, eq, inArray } from 'drizzle-orm';
-import { randomBytes } from 'crypto';
+import { randomBytes, randomUUID } from 'crypto';
 import { DRIZZLE, type DrizzleDB } from '../../core/database/database.module';
 import { bookings } from '../../core/database/schema';
 import { FlightsService } from '../flights/flights.service';
@@ -29,12 +29,15 @@ export class BookingsService {
     // 1. Atomically pop the ephemeral quote token from Redis
     const quote = await this.flightsService.consumeFareQuote(quoteToken);
 
-    // 2. Run seat reservation and booking insertion in one ACID transaction
+    // 2. Run seat assignment and booking insertion in one ACID transaction.
+    //    The ID is generated up front so the seats can point at the booking.
+    const bookingId = randomUUID();
     const confirmedBooking = await this.db.transaction(async (tx) => {
-      await this.flightsService.reserveSeatsInTransaction(
+      await this.flightsService.assignSeatsInTransaction(
         tx as unknown as DrizzleDB,
         quote.flightId,
-        quote.seatCount,
+        quote.seatNumbers,
+        bookingId,
       );
 
       const pnr = randomBytes(3).toString('hex').toUpperCase();
@@ -42,16 +45,17 @@ export class BookingsService {
       const [created] = await tx
         .insert(bookings)
         .values({
+          id: bookingId,
           userId,
           flightId: quote.flightId,
           pnr,
-          seatCount: quote.seatCount,
+          seatCount: quote.seatNumbers.length,
           totalLockedPrice: quote.totalPrice,
           status: 'CONFIRMED',
         })
         .returning();
 
-      return created;
+      return { ...created, seatNumbers: quote.seatNumbers };
     });
 
     // 3. Emit asynchronous domain event for NotificationsModule
@@ -60,7 +64,7 @@ export class BookingsService {
       userId,
       pnr: confirmedBooking.pnr,
       flightNumber: quote.flightNumber,
-      seatCount: confirmedBooking.seatCount,
+      seatNumbers: confirmedBooking.seatNumbers,
       totalPrice: confirmedBooking.totalLockedPrice,
     } satisfies BookingConfirmedEvent);
 
@@ -101,19 +105,18 @@ export class BookingsService {
         throw new ConflictException('Booking was already cancelled');
       }
 
-      await this.flightsService.releaseSeatsInTransaction(
+      const releasedSeats = await this.flightsService.releaseSeatsInTransaction(
         tx as unknown as DrizzleDB,
-        updated.flightId,
-        updated.seatCount,
+        updated.id,
       );
-      return updated;
+      return { ...updated, seatNumbers: releasedSeats };
     });
 
     this.eventEmitter.emit(BookingEvents.Cancelled, {
       bookingId: cancelled.id,
       userId,
       pnr: cancelled.pnr,
-      seatCount: cancelled.seatCount,
+      seatNumbers: cancelled.seatNumbers,
       refundAmount: cancelled.totalLockedPrice,
     } satisfies BookingCancelledEvent);
 
@@ -121,7 +124,18 @@ export class BookingsService {
   }
 
   async getUserBookings(userId: string) {
-    return this.db.select().from(bookings).where(eq(bookings.userId, userId));
+    const userBookings = await this.db
+      .select()
+      .from(bookings)
+      .where(eq(bookings.userId, userId));
+    const seatsByBooking = await this.flightsService.getSeatNumbersByBookingIds(
+      userBookings.map((b) => b.id),
+    );
+    // Cancelled bookings have released their seats, so they list none
+    return userBookings.map((b) => ({
+      ...b,
+      seatNumbers: seatsByBooking.get(b.id) ?? [],
+    }));
   }
 
   // Someone else's booking is reported as "not found", not "forbidden",

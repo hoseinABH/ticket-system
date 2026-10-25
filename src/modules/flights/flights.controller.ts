@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Body, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Query,
+  UseGuards,
+  Param,
+  ParseUUIDPipe,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { FlightsService } from './flights.service';
 import { CreateQuoteDto, SearchFlightsDto } from './dto/flights.dto';
@@ -19,10 +28,15 @@ export class FlightsController {
     return this.flightsService.searchFlights(query.origin, query.destination);
   }
 
+  @Get(':id/seats')
+  getSeatMap(@Param('id', ParseUUIDPipe) id: string) {
+    return this.flightsService.getSeatMap(id);
+  }
+
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Post('quote')
   createQuote(@Body() dto: CreateQuoteDto) {
-    return this.flightsService.createFareQuote(dto.flightId, dto.seatCount);
+    return this.flightsService.createFareQuote(dto.flightId, dto.seatNumbers);
   }
 }

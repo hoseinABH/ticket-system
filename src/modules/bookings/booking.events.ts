@@ -10,7 +10,7 @@ export interface BookingConfirmedEvent {
   userId: string;
   pnr: string;
   flightNumber: string;
-  seatCount: number;
+  seatNumbers: string[];
   totalPrice: string;
 }
 
@@ -18,6 +18,6 @@ export interface BookingCancelledEvent {
   bookingId: string;
   userId: string;
   pnr: string;
-  seatCount: number;
+  seatNumbers: string[];
   refundAmount: string;
 }
