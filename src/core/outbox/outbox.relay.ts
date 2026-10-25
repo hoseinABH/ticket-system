@@ -16,8 +16,8 @@ import { DRIZZLE, type DrizzleDB } from '../database/database.module';
 import { outboxMessages } from '../database/schema';
 import { AMQP } from '../messaging/messaging.module';
 import {
-  assertTopology,
   EVENTS_EXCHANGE,
+  topology,
   type EventEnvelope,
 } from '../messaging/topology';
 
@@ -46,7 +46,10 @@ export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
     this.intervalMs = config.get('OUTBOX_POLL_INTERVAL_MS', { infer: true });
     // A confirm channel: publish() resolves only once the broker has taken
     // responsibility for the message (written it to its queues)
-    this.channel = amqp.createChannel({ confirm: true, setup: assertTopology });
+    this.channel = amqp.createChannel({
+      confirm: true,
+      setup: topology(config.get('MESSAGE_RETRY_DELAYS_MS', { infer: true })),
+    });
   }
 
   onApplicationBootstrap() {

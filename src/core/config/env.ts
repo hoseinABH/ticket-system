@@ -13,6 +13,13 @@ export const envSchema = z.object({
   RABBITMQ_URL: z.url().default('amqp://localhost:5672'),
   // How often the outbox relay looks for unpublished events
   OUTBOX_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(1000),
+  // Backoff before each retry of a failed message, e.g. "1000,5000,30000":
+  // three retries, then the dead-letter queue
+  MESSAGE_RETRY_DELAYS_MS: z
+    .string()
+    .default('1000,5000,30000')
+    .transform((value) => value.split(',').map(Number))
+    .pipe(z.array(z.number().int().positive()).min(1)),
   // HS256 needs a key at least as long as its 256-bit output to be safe
   JWT_SECRET: z.string().min(32, 'must be at least 32 characters'),
   JWT_EXPIRES_IN_SECONDS: z.coerce.number().int().positive().default(3600),

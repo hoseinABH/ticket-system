@@ -14,6 +14,19 @@ describe('validateEnv', () => {
     expect(env.JWT_EXPIRES_IN_SECONDS).toBe(3600);
   });
 
+  it('parses retry delays into a list of milliseconds', () => {
+    expect(validateEnv(validEnv).MESSAGE_RETRY_DELAYS_MS).toEqual([
+      1000, 5000, 30000,
+    ]);
+    expect(
+      validateEnv({ ...validEnv, MESSAGE_RETRY_DELAYS_MS: '50,100' })
+        .MESSAGE_RETRY_DELAYS_MS,
+    ).toEqual([50, 100]);
+    expect(() =>
+      validateEnv({ ...validEnv, MESSAGE_RETRY_DELAYS_MS: '50,soon' }),
+    ).toThrow(/MESSAGE_RETRY_DELAYS_MS/);
+  });
+
   it('rejects a missing JWT_SECRET', () => {
     expect(() => validateEnv({ DATABASE_URL: validEnv.DATABASE_URL })).toThrow(
       /JWT_SECRET/,

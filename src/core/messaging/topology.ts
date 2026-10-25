@@ -1,4 +1,5 @@
 import type { ConfirmChannel } from 'amqplib';
+import { assertRetryTopology } from './retry';
 
 // The broker's "schema": every exchange, queue and binding the app relies on.
 // Declarations are idempotent, so every channel asserts the full topology on
@@ -10,10 +11,14 @@ export const EVENTS_EXCHANGE = 'ticket-system.events';
 
 export const NOTIFICATIONS_QUEUE = 'notifications.booking-events';
 
-export async function assertTopology(channel: ConfirmChannel) {
-  await channel.assertExchange(EVENTS_EXCHANGE, 'topic', { durable: true });
-  await channel.assertQueue(NOTIFICATIONS_QUEUE, { durable: true });
-  await channel.bindQueue(NOTIFICATIONS_QUEUE, EVENTS_EXCHANGE, 'booking.*');
+// Returns a channel setup function; retry queue names depend on the delays
+export function topology(retryDelaysMs: number[]) {
+  return async (channel: ConfirmChannel) => {
+    await channel.assertExchange(EVENTS_EXCHANGE, 'topic', { durable: true });
+    await channel.assertQueue(NOTIFICATIONS_QUEUE, { durable: true });
+    await channel.bindQueue(NOTIFICATIONS_QUEUE, EVENTS_EXCHANGE, 'booking.*');
+    await assertRetryTopology(channel, NOTIFICATIONS_QUEUE, retryDelaysMs);
+  };
 }
 
 // What travels on the wire. `id` is the outbox row ID: stable across
