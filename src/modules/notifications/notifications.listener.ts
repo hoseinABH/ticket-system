@@ -1,23 +1,26 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
-
-export interface BookingConfirmedEvent {
-  bookingId: string;
-  userId: string;
-  pnr: string;
-  flightNumber: string;
-  seatCount: number;
-  totalPrice: string;
-}
+import {
+  BookingEvents,
+  type BookingCancelledEvent,
+  type BookingConfirmedEvent,
+} from '../bookings/booking.events';
 
 @Injectable()
 export class NotificationsListener {
   private readonly logger = new Logger(NotificationsListener.name);
 
-  @OnEvent('booking.confirmed', { async: true })
+  @OnEvent(BookingEvents.Confirmed, { async: true })
   async handleBookingConfirmed(event: BookingConfirmedEvent) {
     this.logger.log(
       `[Ticket Issued] PNR: ${event.pnr} | Flight: ${event.flightNumber} | Seats: ${event.seatCount} | Total: $${event.totalPrice}`,
+    );
+  }
+
+  @OnEvent(BookingEvents.Cancelled, { async: true })
+  async handleBookingCancelled(event: BookingCancelledEvent) {
+    this.logger.log(
+      `[Booking Cancelled] PNR: ${event.pnr} | Seats released: ${event.seatCount} | Refund: $${event.refundAmount}`,
     );
   }
 }

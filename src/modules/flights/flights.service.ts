@@ -70,8 +70,7 @@ export class FlightsService {
       );
   }
 
-  // Create a 15-minute ephemeral lookup token in Redis locking the calculated price
-  async createFareQuote(flightId: string, seatCount: number) {
+  async getFlightById(flightId: string) {
     const [flight] = await this.db
       .select()
       .from(flights)
@@ -79,6 +78,12 @@ export class FlightsService {
     if (!flight) {
       throw new NotFoundException('Flight not found');
     }
+    return flight;
+  }
+
+  // Create a 15-minute ephemeral lookup token in Redis locking the calculated price
+  async createFareQuote(flightId: string, seatCount: number) {
+    const flight = await this.getFlightById(flightId);
     if (flight.availableSeats < seatCount) {
       throw new BadRequestException(
         `Only ${flight.availableSeats} seats remaining`,
@@ -134,6 +139,19 @@ export class FlightsService {
     await tx
       .update(flights)
       .set({ availableSeats: sql`${flights.availableSeats} - ${seatCount}` })
+      .where(eq(flights.id, flightId));
+  }
+
+  // Exposed for BookingsModule to return seats inside its cancel transaction.
+  // A single atomic UPDATE needs no explicit lock: Postgres row-locks it.
+  async releaseSeatsInTransaction(
+    tx: DrizzleDB,
+    flightId: string,
+    seatCount: number,
+  ) {
+    await tx
+      .update(flights)
+      .set({ availableSeats: sql`${flights.availableSeats} + ${seatCount}` })
       .where(eq(flights.id, flightId));
   }
 }

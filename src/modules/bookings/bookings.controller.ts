@@ -1,4 +1,15 @@
-import { Controller, Post, Get, Body, UseGuards, Req } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  UseGuards,
+  Req,
+  Param,
+  ParseUUIDPipe,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { BookingsService } from './bookings.service';
 import { CheckoutBookingDto } from './dto/bookings.dto';
@@ -22,5 +33,16 @@ export class BookingsController {
   @Get('my-bookings')
   getMyBookings(@Req() req: { user: { userId: string } }) {
     return this.bookingsService.getUserBookings(req.user.userId);
+  }
+
+  // An action endpoint rather than PATCH { status }: clients ask for a
+  // business operation, and the server decides what state change it means
+  @Post(':id/cancel')
+  @HttpCode(HttpStatus.OK)
+  cancel(
+    @Req() req: { user: { userId: string } },
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.bookingsService.cancel(req.user.userId, id);
   }
 }

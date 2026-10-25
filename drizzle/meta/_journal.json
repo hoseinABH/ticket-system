@@ -15,6 +15,13 @@
       "when": 1792912233443,
       "tag": "0001_eminent_luckman",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792912979250,
+      "tag": "0002_booking_lifecycle",
+      "breakpoints": true
     }
   ]
 }
